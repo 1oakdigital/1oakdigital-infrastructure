@@ -1,0 +1,9 @@
+secretsprovider: awskms://alias/pulumi?region=eu-west-2
+encryptedkey: AQICAHhNqRZ9O8YvMKnk1Tk1zhj6+dIstgdttR6gdCG7bkNEGAEAZaf9EzLVgmx4RoQtmjS7AAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMk8aucRTMpAZZ9V93AgEQgDvd5Do1MARkPK7plEi5pYw/7z/f1yXl0SZBtbN/CCdChjlQZ8JqyPIW3MCU75HQHBJ+IIlihXYGrBcWrA==
+config:
+  1oakdigital-infrastructure:desiredClusterSize: "3"
+  1oakdigital-infrastructure:eksNodeInstanceType: t2.medium
+  1oakdigital-infrastructure:maxClusterSize: "6"
+  1oakdigital-infrastructure:minClusterSize: "3"
+  1oakdigital-infrastructure:vpcNetworkCidr: 10.0.0.0/16
+  aws:region: us-west-2

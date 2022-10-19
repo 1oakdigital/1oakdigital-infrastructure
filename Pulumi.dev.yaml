@@ -1,9 +1,14 @@
 secretsprovider: awskms://alias/pulumi?region=eu-west-2
 encryptedkey: AQICAHhNqRZ9O8YvMKnk1Tk1zhj6+dIstgdttR6gdCG7bkNEGAEAZaf9EzLVgmx4RoQtmjS7AAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMk8aucRTMpAZZ9V93AgEQgDvd5Do1MARkPK7plEi5pYw/7z/f1yXl0SZBtbN/CCdChjlQZ8JqyPIW3MCU75HQHBJ+IIlihXYGrBcWrA==
 config:
-  1oakdigital-infrastructure:desiredClusterSize: "3"
-  1oakdigital-infrastructure:eksNodeInstanceType: t2.medium
-  1oakdigital-infrastructure:maxClusterSize: "6"
-  1oakdigital-infrastructure:minClusterSize: "3"
-  1oakdigital-infrastructure:vpcNetworkCidr: 10.0.0.0/16
-  aws:region: us-west-2
+  1oakdigital-infrastructure:AWS_ACCESS_KEY_ID:
+    secure: v1:igweCbEL87nqeMj1:51uks6hN+/I6rYp8tZVbYobCHkENZN44AJjTbOjLsg1FptOx
+  1oakdigital-infrastructure:AWS_SECRET_ACCESS_KEY:
+    secure: v1:o4aMeZ0salYxHffX:6whVXaCCx9MWi0WkPBIN15V9b/7e/YhKhJ2lw6GUChtYqxa31pPYJyeS+e5LI4yDh9KSFjroKyQ=
+  1oakdigital-infrastructure:dbPassword:
+    secure: v1:ouZ/GEtgRLJO7fnW:v9fvPltapyGgKRsLWJZPT27VWPxGPdglg5tZ1fw+j77bp0c=
+  1oakdigital-infrastructure:dbUsername:
+    secure: v1:bdZ8t8p+VpKVhV33:dVhEmtqHXbbOvbLID55RHV2RtCwTxtUKP1qjEQ==
+  aws:region: eu-west-2
+  cloudflare:apiToken:
+    secure: v1:6KU1GL0UZAwzC3/T:9hF66r8ZHYXB4yARiCL0r3SUGfzceELt1OBQhxag2+QSq4B3Fqrn381p9pkDmczCUneJnninBNw=

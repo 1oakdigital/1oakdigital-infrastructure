@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { CoreStack } from "./stack";
+import {CoreStack} from "./stack";
 
 const stack = pulumi.getStack();
 export const region = aws.config.requireRegion();
@@ -13,48 +13,51 @@ export const accountId = currentAccount.then((account) => account.accountId);
 let stackResources: CoreStack = {};
 
 if (stack == "dev") {
-  stackResources = new CoreStack(stack, {
-    zoneName: "api.recruitinstantly.com",
-    zoneId: "Z01312652ZZTOLESNGTMH",
-    cidrBlock: "10.0.0.0/24",
-    sshKeyName: stack,
-  });
+    stackResources = new CoreStack(stack, {
+        cidrBlock: "10.0.0.0/18",
+        subdomain: "beta",
+        domains: [
+            "admin.beta.sloopadmin.com",
+            "shag2night.beta.sloopadmin.com",
+            "beta.shag2night.com",
+            "beta.chatadminboard.com",
+        ],
+        sshKeyName: stack,
+    });
 } else if (stack == "prod") {
-  stackResources = new CoreStack(stack, {
-    zoneName: "api.recruitinstantly.com",
-    cidrBlock: "10.0.0.0/18",
-    zoneId: "Z01312652ZZTOLESNGTMH",
-    numberOfNatGateways: 1,
-    sshKeyName: stack,
-    skipCertValidation:true
-  });
+    stackResources = new CoreStack(stack, {
+        cidrBlock: "10.0.0.0/18",
+        sshKeyName: stack,
+    });
 }
+export const kubeconfig = stackResources.kubeconfig
 export const vpc = {
-  id: stackResources.vpc.id,
-  privateSubnetsIds: stackResources.vpc.privateSubnetIds,
-  publicSubnetsIds: stackResources.vpc.publicSubnetIds
+    id: stackResources.vpc.vpcId,
+    privateSubnetsIds: stackResources.vpc.privateSubnetIds,
+    publicSubnetsIds: stackResources.vpc.publicSubnetIds
 };
 
-export const ecsCluster = {
-  id: stackResources.ecsCluster.id,
-  arn: stackResources.ecsCluster.arn,
-  name: stackResources.ecsCluster.name
+export const eksCluster = {
+    id: stackResources.cluster.eksCluster.id,
+    arn: stackResources.cluster.eksCluster.arn,
+    name: stackResources.cluster.eksCluster.name
 };
-export const db = {
-  securityGroupId: stackResources.db.sg.id,
-  secretArn: stackResources.db.secret.arn
+export const dbCluster = {
+    securityGroupId: stackResources.dbCluster.sg.id,
+    secretArn: stackResources.dbCluster.secret.arn
+};
+export const cacheCluster = {
+    securityGroupId: stackResources.cacheCluster.sg.id,
+    clusterAddress: stackResources.cacheCluster.cluster.clusterAddress
 };
 
 
-export const secrets = stackResources.secrets;
-export const hostedZoneId = stackResources.hostedZoneId;
-export const domain = stackResources.domain;
+// export const secrets = stackResources.secrets;
 
-export const certificates = {
-  certificateArn: stackResources.certificate.arn,
-  cloudfrontCertificateArn: stackResources.cloudfrontCertificate.arn
-};
+
 export const bastion = {
-  ip: stackResources.bastion?.instance?.publicIp,
-  securityGroupId: stackResources.bastion?.sg.id
+    ip: stackResources.bastion?.instance?.publicIp,
+    securityGroupId: stackResources.bastion?.sg.id
 };
+export const bucketName =stackResources.bucketName
+export const websiteNameSpace = "websites"

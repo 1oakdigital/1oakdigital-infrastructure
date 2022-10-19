@@ -1,13 +1,12 @@
 import { CertificateArgs as AcmCertificateArgs } from "@pulumi/aws/acm/certificate";
 import * as pulumi from "@pulumi/pulumi";
 import * as awsx from "@pulumi/awsx";
+import * as eks from "@pulumi/eks";
+import {Output} from "@pulumi/pulumi/output";
 
 export interface CoreStackProps {
-  zoneName: string;
-  zoneId: string;
-  domain?: string;
-  certificateArn?: string;
-  certificateId?: string;
+  domains?: string[];
+  subdomain?: string;
   cidrBlock?: string;
   sshKeyName?: string;
   replication?: boolean;
@@ -20,14 +19,29 @@ export interface CertificateArgs extends AcmCertificateArgs {
   skipValidation?: boolean;
 }
 
-export interface PostgresqlProps {
-  name?: string;
+export interface AuroraPostgresqlClusterProps {
+  masterUsername: string | pulumi.Output<string>;
   vpc: awsx.ec2.Vpc;
-  subnetIds: pulumi.Input<pulumi.Input<string>[]>;
   masterPassword: string | pulumi.Output<string>;
   databaseName?: string;
   instanceClass?: string;
   backupRetentionPeriod?: number;
   engineVersion?: string;
   dbClusterParameterGroupName?: string;
+  snapshotIdentifier?: string;
 }
+
+export interface RedisClusterProps {
+  name?: string;
+  vpc: awsx.ec2.Vpc;
+  nodeType?: string;
+  engineVersion?: string;
+}
+
+export interface EfsProps {
+  cluster:eks.Cluster;
+  vpc:awsx.ec2.Vpc;
+  name:string
+  efsId:string | Output<string>
+}
+

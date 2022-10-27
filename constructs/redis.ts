@@ -1,7 +1,7 @@
 import * as aws from "@pulumi/aws";
 import {RedisClusterProps} from "./types";
 
-export const PORT = 6379;
+export const REDIS_PORT = 6379;
 
 export class RedisCluster {
   readonly sg:  aws.ec2.SecurityGroup;
@@ -40,7 +40,7 @@ export class RedisCluster {
         securityGroupIds: [this.sg.id],
         subnetGroupName: subnetGroup.name,
         parameterGroupName: "default.redis6.x",
-        port: PORT,
+        port: REDIS_PORT,
       },
       tags,
     );

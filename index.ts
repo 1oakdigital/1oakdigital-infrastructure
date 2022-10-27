@@ -40,7 +40,9 @@ export const vpc = {
 export const eksCluster = {
     id: stackResources.cluster.eksCluster.id,
     arn: stackResources.cluster.eksCluster.arn,
-    name: stackResources.cluster.eksCluster.name
+    name: stackResources.cluster.eksCluster.name,
+    nodeSecurityGroup: stackResources.cluster.nodeSecurityGroup.id,
+    clusterSecurityGroup: stackResources.cluster.clusterSecurityGroup.id
 };
 export const dbCluster = {
     securityGroupId: stackResources.dbCluster.sg.id,

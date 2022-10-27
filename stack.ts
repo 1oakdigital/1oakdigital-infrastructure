@@ -5,22 +5,24 @@ import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 import * as aws from "@pulumi/aws";
 import {CoreStackProps} from "./constructs/types";
-import {AuroraPostgresqlServerlessCluster} from "./constructs/database";
+import {AuroraPostgresqlServerlessCluster, DB_PORT} from "./constructs/database";
 import * as eks from "@pulumi/eks";
 import {ServiceAccount} from "./constructs/serviceAccount";
 import {
-    AlbControllerPolicy, AutoScalerControllerPolicy,
+    AlbControllerPolicy,
+    AutoScalerControllerPolicy,
     EfsPolicy,
     ExternalDnsControllerPolicy,
     ExternalSecretsControllerPolicy
 } from "./constructs/policies";
 import {createNodeRole} from "./constructs/helpers";
-import {RedisCluster} from "./constructs/redis";
+import {REDIS_PORT, RedisCluster} from "./constructs/redis";
 import {region} from "./index";
 import {EfsEksVolume} from "./constructs/efs";
 import {CloudflareAcmCertificate} from "./constructs/cloudfareCertificate";
 import {adminDomains} from "./constructs/domains";
 import {configClusterExternalSecret} from "./secrets";
+import {GrafanaK8s} from "./constructs/grafana";
 
 
 export class CoreStack {
@@ -86,9 +88,34 @@ export class CoreStack {
             masterUsername: config.requireSecret("dbUsername")
         })
 
-         // EKS cluster configuration
+          if (props.sshKeyName) {
+            this.bastion = new BastionHost(
+                stack,
+                vpc,
+                props.sshKeyName,
+            );
+            new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
+                type: "ingress",
+                fromPort: DB_PORT,
+                toPort: DB_PORT,
+                protocol: "tcp",
+                securityGroupId: this.bastion.sg.id,
+                sourceSecurityGroupId: this.dbCluster.sg.id,
+            });
 
-         const clusterKey = new aws.kms.Key(
+            new aws.ec2.SecurityGroupRule(`${stack}-bastion-redis-rule`, {
+                type: "ingress",
+                fromPort: REDIS_PORT,
+                toPort: REDIS_PORT,
+                protocol: "tcp",
+                securityGroupId: this.bastion.sg.id,
+                sourceSecurityGroupId: this.cacheCluster.sg.id,
+            });
+        }
+
+        // EKS cluster configuration
+
+        const clusterKey = new aws.kms.Key(
             `${stack}-cluster-key`,
             {
                 customerMasterKeySpec: "SYMMETRIC_DEFAULT",
@@ -104,6 +131,21 @@ export class CoreStack {
         const nodeRole = createNodeRole(`${stack}-eks-role`)
         const profile = new aws.iam.InstanceProfile(`${stack}-ng-profile`, {role: nodeRole})
 
+        const nodeSg = new aws.ec2.SecurityGroup(`${stack}-node-sg`, {
+            ingress: [
+                {
+                    protocol: "-1",
+                    fromPort: 0,
+                    toPort: 0,
+                    self: true
+                }
+            ],
+            egress: [
+                {protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: ["0.0.0.0/0"]}
+            ],
+            vpcId: vpc.vpcId,
+            tags
+        });
         this.cluster = new eks.Cluster(`${stack}-eks-cluster`, {
             name: `${stack}-eks-cluster`,
             version: "1.23",
@@ -113,14 +155,17 @@ export class CoreStack {
             skipDefaultNodeGroup: true,
             publicSubnetIds: vpc.publicSubnetIds,
             privateSubnetIds: vpc.privateSubnetIds,
-            // Change configuration values to change any of the following settings
-            instanceType: "t3.medium",
-            instanceProfileName: profile.name,
-            nodeAssociatePublicIpAddress: false,
+
+            // nodeAssociatePublicIpAddress: false,
             endpointPrivateAccess: false,
             endpointPublicAccess: true,
             encryptionConfigKeyArn: clusterKey.arn,
             instanceRoles: [nodeRole],
+            nodeGroupOptions: {
+                instanceType: "t3.medium",
+                instanceProfile: profile,
+                extraNodeSecurityGroups: [nodeSg]
+            }
             // roleMappings: [
             //     // Provides full administrator cluster access to the k8s cluster
             //     {
@@ -156,12 +201,14 @@ export class CoreStack {
         });
 
         // Nodes
+
         eks.createManagedNodeGroup(
             `${stack}-ng-managed-ondemand`, {
                 cluster: this.cluster,
                 nodeGroupName: `${stack}-ng-managed-ondemand`,
                 nodeRoleArn: nodeRole.arn,
-                instanceTypes: ["t3a.large"],
+                instanceTypes: ["t3a.large", "t3.large"],
+
                 subnetIds: this.vpc.privateSubnetIds,
                 labels: {"ondemand": "true"},
                 scalingConfig: {
@@ -171,19 +218,51 @@ export class CoreStack {
                 },
             }, this.cluster
         )
+
         new eks.ManagedNodeGroup(`${stack}-spot`, {
-                cluster: this.cluster,
-                nodeGroupName: `${stack}-spot`,
-                nodeRoleArn: nodeRole.arn,
-                instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
-                subnetIds: this.vpc.privateSubnetIds,
-                capacityType: "SPOT",
-                scalingConfig: {
-                    maxSize: 10,
-                    minSize: 2,
-                    desiredSize: 2
-                },
+            cluster: this.cluster,
+            nodeGroupName: `${stack}-spot`,
+            nodeRoleArn: nodeRole.arn,
+            instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
+            subnetIds: this.vpc.privateSubnetIds,
+            capacityType: "SPOT",
+            taints: [
+                {key: 'compute-type', value: 'spot', effect: 'NO_SCHEDULE'}
+            ],
+            labels: {"compute-type": "spot"},
+            scalingConfig: {
+                maxSize: 10,
+                minSize: 2,
+                desiredSize: 2
+            },
+
+        })
+
+        const fargateRole = new aws.iam.Role(`${stack}-fargate-role`, {
+            assumeRolePolicy: JSON.stringify({
+                Statement: [{
+                    Action: "sts:AssumeRole",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "eks-fargate-pods.amazonaws.com",
+                    },
+                }],
+                Version: "2012-10-17",
             })
+        });
+        new aws.iam.RolePolicyAttachment(`${stack}-AmazonEKSFargatePodExecutionRolePolicy`, {
+            policyArn: "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+            role: fargateRole.name,
+        });
+        const fargateProfile = new aws.eks.FargateProfile(`${stack}-fargate-profile`, {
+            clusterName: this.cluster.eksCluster.name,
+            podExecutionRoleArn: fargateRole.arn,
+            subnetIds: this.vpc.privateSubnetIds,
+            selectors: [{
+                labels: {instance: "fargate"},
+                namespace: "websites"
+            }],
+        });
 
         // Default namespaces
         const automationNamespace = "automation"
@@ -308,7 +387,12 @@ export class CoreStack {
             values: {
                 clusterName: clusterName,
                 env: {AWS_REGION: region},
-                serviceAccount: {create: false, name: albServiceAccount.name}
+                serviceAccount: {create: false, name: albServiceAccount.name},
+                serviceMonitor: {
+                    enabled: true,
+                    additionalLabels: {release: "prometheus"},
+                    namespace: automationNamespace
+                }
             },
             repositoryOpts: {
                 repo: "https://aws.github.io/eks-charts",
@@ -348,6 +432,7 @@ export class CoreStack {
                     },
                     metrics: {
                         enabled: true,
+                        serviceMonitor: {enabled: true, additionalLabels: {release: "prometheus"}},
                         service: {
                             annotations: {
                                 "prometheus.io/scrape": "true",
@@ -365,7 +450,6 @@ export class CoreStack {
                 repo: "https://kubernetes.github.io/ingress-nginx",
             },
         });
-
 
         const externalDnsSA = new ServiceAccount({
             name: "external-dns",
@@ -393,15 +477,47 @@ export class CoreStack {
             version: "1.22.2",
             namespace: automationNamespace,
             values: {
-                prometheus: {install: true},
+                logLevel: "debug",
                 meshProvider: "nginx",
                 // Secrets config disabled, due problems with ExternalSecrets not updating primary secrets
-                configTracking: {enabled: true}
+                configTracking: {enabled: true},
+                podMonitor: {
+                    enabled: true,
+                    additionalLabels: {
+                        release: "prometheus"
+                    }
+                },
+                slack: {
+                    enabled: true,
+                    channel: `${stack}-website-deployments`,
+                    user: "flagger",
+                    clusterName: clusterName,
+                    url: "https://hooks.slack.com/services/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"
+                }
             },
             repositoryOpts: {
                 repo: "https://flagger.app",
             },
         });
+        new k8s.apiextensions.CustomResource(`flagger-metric-template-requests`, {
+            "apiVersion": "flagger.app/v1beta1",
+            "kind": "MetricTemplate",
+            "metadata": {
+                "name": "requests",
+                namespace: automationNamespace,
+            },
+            "spec": {
+                "provider": {
+                    "type": "prometheus",
+                    "address": "https://prometheus-prod-05-gb-south-0.grafana.net/api/prom/",
+                    "secretRef": {
+                        "name": "prometheus-reader",
+                    }
+                },
+                // query: 'sum(rate(nginx_ingress_controller_requests{ingress="{{ target }}"}[1m]))',
+                query: pulumi.interpolate`sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",status!~"[4-5].*",canary=~".*canary.*"}[2m])) / sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",canary=~".*canary.*"}[2m]))`
+            }
+        })
         new k8s.helm.v3.Release("flagger-loadtester", {
             chart: "loadtester",
             version: "0.24.0",
@@ -411,21 +527,9 @@ export class CoreStack {
                 repo: "https://flagger.app",
             },
         });
-        new k8s.helm.v3.Release("metrics-server", {
-            chart: "metrics-server",
-            version: "3.8.2",
-            name: "metrics-server",
-            namespace: "kube-system",
-            values : {
-                hostNetwork: {enabled:true}
-            },
-            repositoryOpts: {
-                repo: "https://kubernetes-sigs.github.io/metrics-server",
-            },
-        });
 
 
-        // Scalling
+        // Scaling
         const autoScalerSA = new ServiceAccount({
             name: `${stack}-cluster-autoscaler`,
             // @ts-ignore
@@ -441,19 +545,32 @@ export class CoreStack {
             values: {
                 rbac: {serviceAccount: {name: autoScalerSA.name, create: false}},
                 autoDiscovery: {clusterName: clusterName},
-                awsRegion: region
+                awsRegion: region,
+                serviceMonitor: {enabled: true, selector: {release: "prometheus"}, namespace: "kube-system"}
             },
             repositoryOpts: {
                 repo: "https://kubernetes.github.io/autoscaler",
             },
         });
+        new k8s.helm.v3.Release("vertical-pod-autoscaler", {
+            chart: "vertical-pod-autoscaler",
+            version: "6.0.0",
+            // values: {
+            //     admissionController: {
+            //         metrics: {serviceMonitor: {enabled: true}}
+            //     }
+            // },
+            repositoryOpts: {
+                repo: "https://cowboysysop.github.io/charts/",
+            },
+        });
 
-        // Volulmes
+
+        // Volumes
         const efs = new aws.efs.FileSystem(`${stack}-eks-storage`, {
             encrypted: true,
             creationToken: `${stack}-website-fs`
         })
-
         const efsSA = new ServiceAccount({
             name: "efs",
             // @ts-ignore
@@ -466,16 +583,16 @@ export class CoreStack {
             new aws.efs.MountTarget(`${stack}-website-${subnetId}-mtg`, {
                 fileSystemId: efs.id,
                 subnetId: subnetId,
-                securityGroups: [this.cluster.nodeSecurityGroup.id]
+                securityGroups: [this.cluster.nodeSecurityGroup.id, this.cluster.clusterSecurityGroup.id],
             });
         }))
-
         new k8s.helm.v3.Release("aws-efs-csi-driver", {
             chart: "aws-efs-csi-driver",
             namespace: "kube-system",
             values: {
                 fileSystemId: efs.id,
-                directoryPerms:	777,
+                directoryPerms: 777,
+                provisioningMode: "efs-ap",
                 image: {repository: "602401143452.dkr.ecr.eu-west-2.amazonaws.com/eks/aws-efs-csi-driver"},
                 controller: {serviceAccount: {create: false, name: efsSA.name}}
             },
@@ -487,11 +604,35 @@ export class CoreStack {
             vpc: this.vpc,
             cluster: this.cluster,
             name: "website",
-            efsId:efs.id
+            efsId: efs.id
         })
 
         // Metrics & Observability
 
+        new k8s.helm.v3.Release("metrics-server", {
+            chart: "metrics-server",
+            version: "3.8.2",
+            name: "metrics-server",
+            namespace: "kube-system",
+            values: {
+                hostNetwork: {enabled: true}
+            },
+            repositoryOpts: {
+                repo: "https://kubernetes-sigs.github.io/metrics-server",
+            },
+        });
+        new k8s.helm.v3.Release("kube-state-metrics", {
+            chart: "kube-state-metrics",
+            version: "4.21.0",
+            values: {
+                image: {tag: "v2.6.0"},
+                prometheus: {monitor: {enabled: true, honorLabels:true, additionalLabels: {release: "prometheus"}}},
+                verticalPodAutoscaler: {enabled: true}
+            },
+            repositoryOpts: {
+                repo: "https://prometheus-community.github.io/helm-charts",
+            },
+        });
         new k8s.helm.v3.Release("kubernetes-dashboard", {
             chart: "kubernetes-dashboard",
             version: "5.10.0",
@@ -501,13 +642,101 @@ export class CoreStack {
             },
         });
 
-        if (props.sshKeyName) {
-            this.bastion = new BastionHost(
-                stack,
-                vpc,
-                props.sshKeyName,
-            );
-        }
+        // Keda
+        const kedaNamespace = new k8s.core.v1.Namespace("keda-namespace", {metadata: {name: "keda"}}, {provider: this.cluster.provider})
+        new k8s.helm.v3.Release("keda", {
+            chart: "keda",
+            version: "2.8.2",
+            name: "keda",
+            namespace: kedaNamespace.metadata.namespace,
+            values: {
+                metricsServer: {
+                    enabled: true
+                },
+                prometheus: {
+                    metricServer: {
+                        enabled: true,
+                        useHostNetwork: false,
+                        podMonitor: {
+                            enabled: true,
+                            additionalLabels: {release: "prometheus"},
+                            namespace: kedaNamespace.metadata.namespace
+                        }
+                    },
+                }
+            },
+            repositoryOpts: {
+                repo: "https://kedacore.github.io/charts",
+            },
+        });
+        new k8s.apiextensions.CustomResource("keda-prometheus-trigger-auth",
+            {
+                "apiVersion": "keda.sh/v1alpha1",
+                "kind": "ClusterTriggerAuthentication",
+                "metadata": {
+                    "name": "keda-prometheus",
+                    labels: {"release": "prometheus"}
+                },
+                "spec": {
+                    "secretTargetRef": [
+                        {
+                            "parameter": "username",
+                            "name": "prometheus-reader",
+                            "key": "username"
+                        },
+                        {
+                            "parameter": "password",
+                            "name": "prometheus-reader",
+                            "key": "password"
+                        }
+                    ]
+                }
+            })
+
+
+
+        // Grafana & Prometheus
+        new k8s.helm.v3.Release("grafana-agent-operator", {
+            chart: "grafana-agent-operator",
+            version: "0.2.8",
+            repositoryOpts: {
+                repo: "https://grafana.github.io/helm-charts",
+            },
+        });
+        new k8s.core.v1.Secret(`prometheus-reader-secret`, {
+            metadata: {
+                name: "prometheus-reader",
+                namespace: kedaNamespace.metadata.name
+            },
+            stringData: {
+                username: "622277",
+                password: "eyJrIjoiNDQzN2RjZTkzMDVmNTBhMWQ4MTI0NmFiYjU2YzgyMDQ4OWQ0ZDlmYSIsIm4iOiJyZWFkZXIiLCJpZCI6NzMxNzE4fQ=="
+            }
+        })
+        new k8s.core.v1.Secret(`prometheus-reader-secret-w`, {
+            metadata: {
+                name: "prometheus-reader",
+                namespace: automationNamespace
+            },
+            stringData: {
+                username: "622277",
+                password: "eyJrIjoiNDQzN2RjZTkzMDVmNTBhMWQ4MTI0NmFiYjU2YzgyMDQ4OWQ0ZDlmYSIsIm4iOiJyZWFkZXIiLCJpZCI6NzMxNzE4fQ=="
+            }
+        })
+        new k8s.core.v1.Secret(`prometheus-reader-secret-d`, {
+            metadata: {
+                name: "prometheus-reader",
+                namespace: "default"
+            },
+            stringData: {
+                username: "622277",
+                password: "eyJrIjoiNDQzN2RjZTkzMDVmNTBhMWQ4MTI0NmFiYjU2YzgyMDQ4OWQ0ZDlmYSIsIm4iOiJyZWFkZXIiLCJpZCI6NzMxNzE4fQ=="
+            }
+        })
+
+        new GrafanaK8s(stack, clusterName)
+
+
 
         // Shared Secrets and Config maps
 
@@ -524,14 +753,20 @@ export class CoreStack {
                 },
             },
         );
+        new k8s.yaml.ConfigFile(
+            `${stack}-cloudwatch-config`,
+            {file: "config/cloudwatch-config.yaml"}
+        );
 
         //
         // TODO Import bucket construct
         this.bucketName = "dating-sites-staging"
 
         this.kubeconfig = this.cluster.kubeconfig
-        configClusterExternalSecret("aws-credentials", {namespace:websitesNamespace, keys:["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]})
+        configClusterExternalSecret("aws-credentials", {
+            namespace: websitesNamespace,
+            keys: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+        })
     }
 }
-
 

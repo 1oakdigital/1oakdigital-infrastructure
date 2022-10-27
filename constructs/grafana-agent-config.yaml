@@ -1,0 +1,93 @@
+kind: ConfigMap
+metadata:
+  name: grafana-agent
+apiVersion: v1
+data:
+  agent.yaml: |    
+    metrics:
+      wal_directory: /var/lib/agent/wal
+      global:
+        scrape_interval: 60s
+        external_labels:
+          cluster: dev-eks
+      configs:
+      - name: integrations
+        remote_write:
+        - url: https://prometheus-prod-05-gb-south-0.grafana.net/api/prom/push
+          basic_auth:
+            username: 622277
+            password: eyJrIjoiYjQ2NzkxZjg3MTliMTA3ZDM1MzhhZDA2OWUyMzM4MmE3NTVjMzBkYyIsIm4iOiJzdGFjay00NjA3NTItZWFzeXN0YXJ0LXByb20tcHVibGlzaGVyIiwiaWQiOjczMTcxOH0=
+        scrape_configs:
+        - bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          job_name: integrations/kubernetes/cadvisor
+          kubernetes_sd_configs:
+              - role: node
+          metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: container_fs_reads_bytes_total|kubelet_pleg_relist_interval_seconds_bucket|storage_operation_duration_seconds_count|kube_node_status_allocatable|container_cpu_cfs_periods_total|kube_job_status_active|node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile|container_network_receive_packets_dropped_total|cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits|kubelet_cgroup_manager_duration_seconds_count|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|kubelet_volume_stats_inodes|kubelet_volume_stats_capacity_bytes|kube_horizontalpodautoscaler_status_current_replicas|kubelet_certificate_manager_client_expiration_renew_errors|namespace_cpu:kube_pod_container_resource_limits:sum|container_network_transmit_packets_total|container_memory_working_set_bytes|kubelet_pleg_relist_duration_seconds_bucket|kube_statefulset_status_current_revision|container_network_receive_bytes_total|kubelet_volume_stats_available_bytes|kubelet_running_pods|namespace_workload_pod:kube_pod_owner:relabel|kubelet_pod_start_duration_seconds_count|kubelet_pod_worker_duration_seconds_bucket|container_cpu_usage_seconds_total|rest_client_requests_total|namespace_cpu:kube_pod_container_resource_requests:sum|container_network_receive_packets_total|kubelet_pod_start_duration_seconds_bucket|kube_daemonset_status_number_misscheduled|container_fs_writes_bytes_total|kubelet_runtime_operations_errors_total|kube_statefulset_status_observed_generation|kube_deployment_status_observed_generation|kubelet_cgroup_manager_duration_seconds_bucket|kube_horizontalpodautoscaler_spec_max_replicas|kube_pod_container_status_waiting_reason|node_namespace_pod_container:container_memory_rss|cluster:namespace:pod_memory:active:kube_pod_container_resource_limits|kubelet_volume_stats_inodes_used|kube_statefulset_metadata_generation|kube_node_spec_taint|kubelet_running_containers|cluster:namespace:pod_memory:active:kube_pod_container_resource_requests|storage_operation_errors_total|kube_job_failed|kube_deployment_spec_replicas|namespace_memory:kube_pod_container_resource_requests:sum|node_namespace_pod_container:container_memory_cache|kube_deployment_metadata_generation|kubelet_server_expiration_renew_errors|process_resident_memory_bytes|kube_statefulset_status_replicas_ready|container_fs_reads_total|kube_replicaset_owner|namespace_memory:kube_pod_container_resource_limits:sum|kube_node_info|container_memory_swap|namespace_workload_pod|container_memory_cache|kube_daemonset_status_number_available|volume_manager_total_volumes|kubernetes_build_info|kubelet_certificate_manager_client_ttl_seconds|kube_resourcequota|kubelet_pod_worker_duration_seconds_count|kubelet_runtime_operations_total|process_cpu_seconds_total|kubelet_node_name|kubelet_running_pod_count|container_cpu_cfs_throttled_periods_total|kube_pod_container_resource_requests|kube_statefulset_status_replicas|kube_node_status_capacity|kube_statefulset_replicas|kube_daemonset_status_desired_number_scheduled|kube_horizontalpodautoscaler_status_desired_replicas|kube_daemonset_status_updated_number_scheduled|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|kube_pod_owner|container_fs_writes_total|kubelet_pleg_relist_duration_seconds_count|kubelet_running_container_count|go_goroutines|kube_statefulset_status_update_revision|kube_pod_status_phase|kubelet_node_config_error|kube_deployment_status_replicas_updated|kube_daemonset_status_current_number_scheduled|machine_memory_bytes|kube_horizontalpodautoscaler_spec_min_replicas|container_memory_rss|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|container_network_transmit_packets_dropped_total|kube_statefulset_status_replicas_updated|kube_job_status_start_time|container_network_transmit_bytes_total|kube_namespace_status_phase|node_namespace_pod_container:container_memory_working_set_bytes|node_namespace_pod_container:container_memory_swap|kube_pod_info|kube_node_status_condition|kubelet_certificate_manager_server_ttl_seconds|kube_namespace_status_phase|container_cpu_usage_seconds_total|kube_pod_status_phase|kube_pod_start_time|kube_pod_container_status_restarts_total|kube_pod_container_info|kube_pod_container_status_waiting_reason|kube_daemonset.*|kube_replicaset.*|kube_statefulset.*|kube_job.*|kube_node_status_capacity|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|namespace_cpu:kube_pod_container_resource_requests:sum
+                action: keep
+          relabel_configs:
+              - replacement: kubernetes.default.svc.cluster.local:443
+                target_label: __address__
+              - regex: (.+)
+                replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+                source_labels:
+                  - __meta_kubernetes_node_name
+                target_label: __metrics_path__
+          scheme: https
+          tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              insecure_skip_verify: false
+              server_name: kubernetes
+        - bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          job_name: integrations/kubernetes/kubelet
+          kubernetes_sd_configs:
+              - role: node
+          metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: container_fs_reads_bytes_total|kubelet_pleg_relist_interval_seconds_bucket|storage_operation_duration_seconds_count|kube_node_status_allocatable|container_cpu_cfs_periods_total|kube_job_status_active|node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile|container_network_receive_packets_dropped_total|cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits|kubelet_cgroup_manager_duration_seconds_count|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|kubelet_volume_stats_inodes|kubelet_volume_stats_capacity_bytes|kube_horizontalpodautoscaler_status_current_replicas|kubelet_certificate_manager_client_expiration_renew_errors|namespace_cpu:kube_pod_container_resource_limits:sum|container_network_transmit_packets_total|container_memory_working_set_bytes|kubelet_pleg_relist_duration_seconds_bucket|kube_statefulset_status_current_revision|container_network_receive_bytes_total|kubelet_volume_stats_available_bytes|kubelet_running_pods|namespace_workload_pod:kube_pod_owner:relabel|kubelet_pod_start_duration_seconds_count|kubelet_pod_worker_duration_seconds_bucket|container_cpu_usage_seconds_total|rest_client_requests_total|namespace_cpu:kube_pod_container_resource_requests:sum|container_network_receive_packets_total|kubelet_pod_start_duration_seconds_bucket|kube_daemonset_status_number_misscheduled|container_fs_writes_bytes_total|kubelet_runtime_operations_errors_total|kube_statefulset_status_observed_generation|kube_deployment_status_observed_generation|kubelet_cgroup_manager_duration_seconds_bucket|kube_horizontalpodautoscaler_spec_max_replicas|kube_pod_container_status_waiting_reason|node_namespace_pod_container:container_memory_rss|cluster:namespace:pod_memory:active:kube_pod_container_resource_limits|kubelet_volume_stats_inodes_used|kube_statefulset_metadata_generation|kube_node_spec_taint|kubelet_running_containers|cluster:namespace:pod_memory:active:kube_pod_container_resource_requests|storage_operation_errors_total|kube_job_failed|kube_deployment_spec_replicas|namespace_memory:kube_pod_container_resource_requests:sum|node_namespace_pod_container:container_memory_cache|kube_deployment_metadata_generation|kubelet_server_expiration_renew_errors|process_resident_memory_bytes|kube_statefulset_status_replicas_ready|container_fs_reads_total|kube_replicaset_owner|namespace_memory:kube_pod_container_resource_limits:sum|kube_node_info|container_memory_swap|namespace_workload_pod|container_memory_cache|kube_daemonset_status_number_available|volume_manager_total_volumes|kubernetes_build_info|kubelet_certificate_manager_client_ttl_seconds|kube_resourcequota|kubelet_pod_worker_duration_seconds_count|kubelet_runtime_operations_total|process_cpu_seconds_total|kubelet_node_name|kubelet_running_pod_count|container_cpu_cfs_throttled_periods_total|kube_pod_container_resource_requests|kube_statefulset_status_replicas|kube_node_status_capacity|kube_statefulset_replicas|kube_daemonset_status_desired_number_scheduled|kube_horizontalpodautoscaler_status_desired_replicas|kube_daemonset_status_updated_number_scheduled|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|kube_pod_owner|container_fs_writes_total|kubelet_pleg_relist_duration_seconds_count|kubelet_running_container_count|go_goroutines|kube_statefulset_status_update_revision|kube_pod_status_phase|kubelet_node_config_error|kube_deployment_status_replicas_updated|kube_daemonset_status_current_number_scheduled|machine_memory_bytes|kube_horizontalpodautoscaler_spec_min_replicas|container_memory_rss|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|container_network_transmit_packets_dropped_total|kube_statefulset_status_replicas_updated|kube_job_status_start_time|container_network_transmit_bytes_total|kube_namespace_status_phase|node_namespace_pod_container:container_memory_working_set_bytes|node_namespace_pod_container:container_memory_swap|kube_pod_info|kube_node_status_condition|kubelet_certificate_manager_server_ttl_seconds|kube_namespace_status_phase|container_cpu_usage_seconds_total|kube_pod_status_phase|kube_pod_start_time|kube_pod_container_status_restarts_total|kube_pod_container_info|kube_pod_container_status_waiting_reason|kube_daemonset.*|kube_replicaset.*|kube_statefulset.*|kube_job.*|kube_node_status_capacity|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|namespace_cpu:kube_pod_container_resource_requests:sum
+                action: keep
+          relabel_configs:
+              - replacement: kubernetes.default.svc.cluster.local:443
+                target_label: __address__
+              - regex: (.+)
+                replacement: /api/v1/nodes/${1}/proxy/metrics
+                source_labels:
+                  - __meta_kubernetes_node_name
+                target_label: __metrics_path__
+          scheme: https
+          tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              insecure_skip_verify: false
+              server_name: kubernetes
+        - job_name: integrations/kubernetes/kube-state-metrics
+          kubernetes_sd_configs:
+              - role: pod
+          metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: container_fs_reads_bytes_total|kubelet_pleg_relist_interval_seconds_bucket|storage_operation_duration_seconds_count|kube_node_status_allocatable|container_cpu_cfs_periods_total|kube_job_status_active|node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile|container_network_receive_packets_dropped_total|cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits|kubelet_cgroup_manager_duration_seconds_count|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|kubelet_volume_stats_inodes|kubelet_volume_stats_capacity_bytes|kube_horizontalpodautoscaler_status_current_replicas|kubelet_certificate_manager_client_expiration_renew_errors|namespace_cpu:kube_pod_container_resource_limits:sum|container_network_transmit_packets_total|container_memory_working_set_bytes|kubelet_pleg_relist_duration_seconds_bucket|kube_statefulset_status_current_revision|container_network_receive_bytes_total|kubelet_volume_stats_available_bytes|kubelet_running_pods|namespace_workload_pod:kube_pod_owner:relabel|kubelet_pod_start_duration_seconds_count|kubelet_pod_worker_duration_seconds_bucket|container_cpu_usage_seconds_total|rest_client_requests_total|namespace_cpu:kube_pod_container_resource_requests:sum|container_network_receive_packets_total|kubelet_pod_start_duration_seconds_bucket|kube_daemonset_status_number_misscheduled|container_fs_writes_bytes_total|kubelet_runtime_operations_errors_total|kube_statefulset_status_observed_generation|kube_deployment_status_observed_generation|kubelet_cgroup_manager_duration_seconds_bucket|kube_horizontalpodautoscaler_spec_max_replicas|kube_pod_container_status_waiting_reason|node_namespace_pod_container:container_memory_rss|cluster:namespace:pod_memory:active:kube_pod_container_resource_limits|kubelet_volume_stats_inodes_used|kube_statefulset_metadata_generation|kube_node_spec_taint|kubelet_running_containers|cluster:namespace:pod_memory:active:kube_pod_container_resource_requests|storage_operation_errors_total|kube_job_failed|kube_deployment_spec_replicas|namespace_memory:kube_pod_container_resource_requests:sum|node_namespace_pod_container:container_memory_cache|kube_deployment_metadata_generation|kubelet_server_expiration_renew_errors|process_resident_memory_bytes|kube_statefulset_status_replicas_ready|container_fs_reads_total|kube_replicaset_owner|namespace_memory:kube_pod_container_resource_limits:sum|kube_node_info|container_memory_swap|namespace_workload_pod|container_memory_cache|kube_daemonset_status_number_available|volume_manager_total_volumes|kubernetes_build_info|kubelet_certificate_manager_client_ttl_seconds|kube_resourcequota|kubelet_pod_worker_duration_seconds_count|kubelet_runtime_operations_total|process_cpu_seconds_total|kubelet_node_name|kubelet_running_pod_count|container_cpu_cfs_throttled_periods_total|kube_pod_container_resource_requests|kube_statefulset_status_replicas|kube_node_status_capacity|kube_statefulset_replicas|kube_daemonset_status_desired_number_scheduled|kube_horizontalpodautoscaler_status_desired_replicas|kube_daemonset_status_updated_number_scheduled|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|kube_pod_owner|container_fs_writes_total|kubelet_pleg_relist_duration_seconds_count|kubelet_running_container_count|go_goroutines|kube_statefulset_status_update_revision|kube_pod_status_phase|kubelet_node_config_error|kube_deployment_status_replicas_updated|kube_daemonset_status_current_number_scheduled|machine_memory_bytes|kube_horizontalpodautoscaler_spec_min_replicas|container_memory_rss|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|container_network_transmit_packets_dropped_total|kube_statefulset_status_replicas_updated|kube_job_status_start_time|container_network_transmit_bytes_total|kube_namespace_status_phase|node_namespace_pod_container:container_memory_working_set_bytes|node_namespace_pod_container:container_memory_swap|kube_pod_info|kube_node_status_condition|kubelet_certificate_manager_server_ttl_seconds|kube_namespace_status_phase|container_cpu_usage_seconds_total|kube_pod_status_phase|kube_pod_start_time|kube_pod_container_status_restarts_total|kube_pod_container_info|kube_pod_container_status_waiting_reason|kube_daemonset.*|kube_replicaset.*|kube_statefulset.*|kube_job.*|kube_node_status_capacity|node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate|cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests|namespace_cpu:kube_pod_container_resource_requests:sum
+                action: keep
+          relabel_configs:
+              - action: keep
+                regex: kube-state-metrics
+                source_labels:
+                  - __meta_kubernetes_pod_label_app_kubernetes_io_name      
+    integrations:
+      eventhandler:
+        cache_path: /var/lib/agent/eventhandler.cache
+        logs_instance: integrations
+    logs:
+      configs:
+      - name: integrations
+        clients:
+        - url: https://logs-prod-008.grafana.net/loki/api/v1/push
+          basic_auth:
+            username: 310108
+            password: eyJrIjoiYjQ2NzkxZjg3MTliMTA3ZDM1MzhhZDA2OWUyMzM4MmE3NTVjMzBkYyIsIm4iOiJzdGFjay00NjA3NTItZWFzeXN0YXJ0LXByb20tcHVibGlzaGVyIiwiaWQiOjczMTcxOH0=
+          external_labels:
+            cluster: dev-eks
+            job: integrations/kubernetes/eventhandler
+        positions:
+          filename: /tmp/positions.yaml
+        target_config:
+          sync_period: 10s

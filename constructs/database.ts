@@ -1,68 +1,88 @@
 import * as aws from "@pulumi/aws";
-import {SecurityGroup} from "@pulumi/awsx/ec2/securityGroup";
-import {PostgresqlProps} from "./types";
+import {AuroraPostgresqlClusterProps} from "./types";
 import * as pulumi from "@pulumi/pulumi";
 
-export class PostgresqlInstance {
-  readonly sg: SecurityGroup;
-  readonly database: aws.rds.Instance;
-  readonly secret: aws.secretsmanager.Secret;
+export const DB_PORT = 3306
+export class AuroraPostgresqlServerlessCluster {
+    readonly sg: aws.ec2.SecurityGroup;
+    readonly cluster: aws.rds.Cluster;
+    readonly secret: aws.secretsmanager.Secret;
 
-  constructor(stack: string, props: PostgresqlProps, tags?: { [key: string]: string }) {
-    const constructName = `${stack}-${props.name}`
-
-    this.sg = new SecurityGroup(`db-${constructName}`, {
-      vpc: props.vpc,
-      egress: [
-        {
-          cidrBlocks: ["0.0.0.0/0"],
-          protocol: "tcp",
-          fromPort: 0,
-          toPort: 65535,
-        },
-      ],
-    });
-
-    const subnetGroup = new aws.rds.SubnetGroup(`${constructName}-subnet-group`, {
-      subnetIds: props.subnetIds,
-    });
-
-    this.database = new aws.rds.Instance(`${constructName}-db`, {
-      identifier: constructName,
-      allocatedStorage: 20,
-      maxAllocatedStorage: 100,
-      engine: "postgres",
-      engineVersion: "14.2",
-      instanceClass: "db.t4g.micro",
-      dbName: props.name,
-      vpcSecurityGroupIds: [this.sg.id],
-      publiclyAccessible: false,
-      performanceInsightsEnabled: false,
-      dbSubnetGroupName: subnetGroup.name,
-      password: props.masterPassword,
-      skipFinalSnapshot: true,
-      username: "postgres"
-    });
+    constructor(stack: string, props: AuroraPostgresqlClusterProps, tags?: { [key: string]: string }) {
+        const constructName = props.databaseName ? `${stack}-${props.databaseName}` : stack;
 
 
-    this.secret = new aws.secretsmanager.Secret(`${constructName}-db-secret`, {
-      name: `${stack}/${props.name}/db-secret`,
-      tags,
-    });
-    new aws.secretsmanager.SecretVersion(`${constructName}-secret-version`, {
-      secretId: this.secret.id,
-      secretString: pulumi
-        .all([props.masterPassword, this.database.username, this.database.endpoint, this.database.port])
-        .apply(([masterPassword, masterUsername, endpoint, port]) =>
-          JSON.stringify({
-            password: masterPassword,
-            username: masterUsername,
-            host: endpoint,
-            port: port,
-            name: props.name,
-            engine: "postgres"
-          }),
-        ),
-    })
-  }
+        this.sg = new aws.ec2.SecurityGroup(`${constructName}-db-sg`, {
+            vpcId: props.vpc.vpcId,
+            egress: [
+                {
+                    cidrBlocks: ["0.0.0.0/0"],
+                    protocol: "tcp",
+                    fromPort: 0,
+                    toPort: 65535,
+                },
+            ],
+        });
+
+        const subnetGroup = new aws.rds.SubnetGroup(`${constructName}-db-subnet-group`, {
+            subnetIds: props.vpc.privateSubnetIds
+        });
+
+        this.cluster = new aws.rds.Cluster(
+            `${constructName}-db-cluster`,
+            {
+                databaseName: props.databaseName,
+                clusterIdentifier: `${constructName}-aurora-cluster`,
+                engine: "aurora-mysql",
+                engineMode: "provisioned",
+                engineVersion: "8.0.mysql_aurora.3.02.1",
+                serverlessv2ScalingConfiguration: {
+                    maxCapacity: 1,
+                    minCapacity: 0.5,
+                },
+                masterUsername: props.masterUsername,
+                masterPassword: props.masterPassword,
+                vpcSecurityGroupIds: [this.sg.id],
+                port: DB_PORT,
+                dbClusterParameterGroupName: props.dbClusterParameterGroupName,
+                snapshotIdentifier: props.snapshotIdentifier,
+                skipFinalSnapshot: true,
+                applyImmediately: true,
+                storageEncrypted: true,
+                deletionProtection: false,
+
+                dbSubnetGroupName: subnetGroup.name,
+                backupRetentionPeriod: props.backupRetentionPeriod ?? 1,
+                tags,
+            },
+            {protect: true, retainOnDelete: false},
+        )
+
+        new aws.rds.ClusterInstance(`${constructName}-db-cluster-instance-writer`, {
+            clusterIdentifier: this.cluster.id,
+            instanceClass: "db.serverless",
+            engine: "aurora-mysql",
+            engineVersion: this.cluster.engineVersion,
+        });
+
+        this.secret = new aws.secretsmanager.Secret(`${constructName}-db-secret`, {
+            name: `${constructName}/database`,
+            tags,
+        });
+        new aws.secretsmanager.SecretVersion(`${constructName}-db-secret-version`, {
+            secretId: this.secret.id,
+            secretString: pulumi
+                .all([props.masterPassword, this.cluster.masterUsername, this.cluster.endpoint, this.cluster.port])
+                .apply(([masterPassword, masterUsername, endpoint, port]) =>
+                    JSON.stringify({
+                        password: masterPassword,
+                        username: masterUsername,
+                        host: endpoint,
+                        port: port,
+                        name: props.databaseName,
+                        engine: "mysql"
+                    }),
+                ),
+        })
+    }
 }

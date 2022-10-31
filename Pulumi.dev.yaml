@@ -1,9 +1,26 @@
 secretsprovider: awskms://alias/pulumi?region=eu-west-2
 encryptedkey: AQICAHhNqRZ9O8YvMKnk1Tk1zhj6+dIstgdttR6gdCG7bkNEGAEAZaf9EzLVgmx4RoQtmjS7AAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMk8aucRTMpAZZ9V93AgEQgDvd5Do1MARkPK7plEi5pYw/7z/f1yXl0SZBtbN/CCdChjlQZ8JqyPIW3MCU75HQHBJ+IIlihXYGrBcWrA==
 config:
-  1oakdigital-infrastructure:desiredClusterSize: "3"
-  1oakdigital-infrastructure:eksNodeInstanceType: t2.medium
-  1oakdigital-infrastructure:maxClusterSize: "6"
-  1oakdigital-infrastructure:minClusterSize: "3"
-  1oakdigital-infrastructure:vpcNetworkCidr: 10.0.0.0/16
-  aws:region: us-west-2
+  1oakdigital-infrastructure:AWS_ACCESS_KEY_ID:
+    secure: v1:igweCbEL87nqeMj1:51uks6hN+/I6rYp8tZVbYobCHkENZN44AJjTbOjLsg1FptOx
+  1oakdigital-infrastructure:AWS_SECRET_ACCESS_KEY:
+    secure: v1:o4aMeZ0salYxHffX:6whVXaCCx9MWi0WkPBIN15V9b/7e/YhKhJ2lw6GUChtYqxa31pPYJyeS+e5LI4yDh9KSFjroKyQ=
+  1oakdigital-infrastructure:dbPassword:
+    secure: v1:ouZ/GEtgRLJO7fnW:v9fvPltapyGgKRsLWJZPT27VWPxGPdglg5tZ1fw+j77bp0c=
+  1oakdigital-infrastructure:dbUsername:
+    secure: v1:bdZ8t8p+VpKVhV33:dVhEmtqHXbbOvbLID55RHV2RtCwTxtUKP1qjEQ==
+  1oakdigital-infrastructure:loki_password:
+    secure: v1:6Jx0AT+3nYpAIyyk:X7jz1tcGwVI7C3IjVSxL4bF/YEO/DaXEsZKM7SRSk1wU+75YirPwTXBNAXi5UMT5veDaggnmvM2Oj2vstwTCaOVfygJyDjVY9/RYUgZ14VKQw52NFOpxzobMkCEfbctNE8rYsvTOvakCAAGduzSFNKzidJtUCaP+9XbcQ2JdZSUq5kCV6Yc3dvMdJbjh+5E6pTgSF1CKz0ENGn3C
+  1oakdigital-infrastructure:loki_username:
+    secure: v1:8wuymb4ZzcT2BfAj:SbJjW/0fXHFgVeYoI6eQvpSM47Nb0w==
+  1oakdigital-infrastructure:prometheus_pusher_key:
+    secure: v1:V4KUrTu3eNOtXELx:o7Qlpp23zH3wZHHaGg048xIrlCoODKohyDx+WUn1jb57iItlxwWWewsBb1ivLaaIyzrg68VpjRmNWiU9A+VtbmlObRs51BTuBdf+dx/3Q78elJV+NfUxQ6z2EG55OH6qGjXO/SXsJuUkCegTF/SamCseUzDF5X6lwr5AQD+Q102/iGpEcX8aDw==
+  1oakdigital-infrastructure:prometheus_reader_key:
+    secure: v1:pX2Ui5ty9pp7Gai/:FYDo5w8RhwQAuxPOYX8S/o5NvUi9umR1UaDu39xe6gQpF2Fx51pkMRKNrvc5xZQwydbnnIRLU/Eqq5Q8/rdltblLkHAzAYrE9jrBKhToJj1hDU7msFytbjwrbOiwDw710bTr0IoAQq65v+alxvMkbkBcV20=
+  1oakdigital-infrastructure:prometheus_reader_username:
+    secure: v1:FQ0Bmti1NQ7RbIZz:u4dwnbQleLK1hWv1/sqX8d/ZTQdaUg==
+  1oakdigital-infrastructure:prometheus_user:
+    secure: v1:RqPDa3hWNrR1f/io:B3+ga8WVN8YyQ1QqAv8xUQRWG/9vRQ==
+  aws:region: eu-west-2
+  cloudflare:apiToken:
+    secure: v1:6KU1GL0UZAwzC3/T:9hF66r8ZHYXB4yARiCL0r3SUGfzceELt1OBQhxag2+QSq4B3Fqrn381p9pkDmczCUneJnninBNw=

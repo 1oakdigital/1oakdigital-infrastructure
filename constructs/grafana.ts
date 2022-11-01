@@ -340,7 +340,9 @@ export class GrafanaK8s {
         pipelineStages: [
           {
             docker: {}
-          }
+          },
+          {
+            labelallow: ["__meta_kubernetes_pod_label_(.+)"]}
         ],
         namespaceSelector: {
           matchNames: [

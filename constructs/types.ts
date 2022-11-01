@@ -11,6 +11,7 @@ export interface CoreStackProps {
   sshKeyName?: string;
   replication?: boolean;
   numberOfNatGateways?: number;
+  numberOfAvailabilityZones?: number;
   skipCertValidation?: boolean;
 }
 

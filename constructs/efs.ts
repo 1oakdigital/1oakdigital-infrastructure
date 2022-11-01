@@ -51,23 +51,23 @@ export class EfsEksVolume {
         //     {provider: props.cluster.provider}
         // );
 
-        new k8s.core.v1.PersistentVolumeClaim(
-            `${stack}-${props.name}-claim`,
-            {
-                metadata: {
-                    name: `${stack}-${props.name}-claim`,
-                    namespace: "websites",
-                    // annotations: {
-                    //     "volume.beta.kubernetes.io/storage-class": `${stack}-${props.name}-sc`
-                    // }
-                },
-                spec: {
-                    accessModes: ["ReadWriteMany"],
-                    storageClassName: `${stack}-${props.name}-sc`,
-                    resources: {requests: {storage: "5Gi"}}
-                }
-            },
-            {provider: props.cluster.provider}
-        );
+        // new k8s.core.v1.PersistentVolumeClaim(
+        //     `${stack}-${props.name}-claim`,
+        //     {
+        //         metadata: {
+        //             name: `${stack}-${props.name}-claim`,
+        //             namespace: "websites",
+        //             // annotations: {
+        //             //     "volume.beta.kubernetes.io/storage-class": `${stack}-${props.name}-sc`
+        //             // }
+        //         },
+        //         spec: {
+        //             accessModes: ["ReadWriteMany"],
+        //             storageClassName: `${stack}-${props.name}-sc`,
+        //             resources: {requests: {storage: "5Gi"}}
+        //         }
+        //     },
+        //     {provider: props.cluster.provider}
+        // );
     }
 }

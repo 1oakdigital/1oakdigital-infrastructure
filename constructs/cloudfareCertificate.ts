@@ -89,29 +89,31 @@ export class CloudflareAcmCertificateV2 {
         Object.entries(
           opts.reduce((acc, record) => {
             // dedup by the record's name
-             if (record.domainName.indexOf("*") != 0)
+              if (record.domainName.indexOf("*") != 0)
              acc[record.resourceRecordName] = record;
 
             return acc;
           }, {} as { [key: string]: aws.types.output.acm.CertificateDomainValidationOption })
         ).map(
-          ([name, record], i) =>
-            new cloudflare.Record(
-              `${record.domainName}-cf-validation-record-${i}`,
-              {
-                name,
-                zoneId:
-                  domainZoneMap[
-                    record.domainName.split(".").slice(-2).join(".")
-                  ],
-                ttl: 3600,
-                type: "CNAME",
-                value: record.resourceRecordValue,
-              },
-              { deleteBeforeReplace: true, retainOnDelete: true }
-            )
+          ([name, record], i) => {
+              const zoneId= domainZoneMap[
+                              record.domainName.split(".").slice(-2).join(".")
+                              ]
+              return new cloudflare.Record(
+                  `${name}-${zoneId}.${i}`,
+                  {
+                      name,
+                      zoneId,
+                      // ttl: 3600,
+                      type: "CNAME",
+                      value: record.resourceRecordValue,
+                  },
+                  {deleteBeforeReplace: true}
+              )
+          }
         )
       );
+
 
     new aws.acm.CertificateValidation(
       `${baseName}-validation`,

@@ -25,7 +25,7 @@ if (stack == 'dev') {
     subdomain: "v2"
   })
 }
-export const kubeconfig = stackResources.kubeconfig
+// export const kubeconfig = stackResources.kubeconfig
 export const vpc = {
   id: stackResources.vpc.vpcId,
   privateSubnetsIds: stackResources.vpc.privateSubnetIds,
@@ -39,21 +39,21 @@ export const eksCluster = {
   nodeSecurityGroup: stackResources.cluster.nodeSecurityGroup.id,
   clusterSecurityGroup: stackResources.cluster.clusterSecurityGroup.id
 }
-// export const dbCluster = {
-//     securityGroupId: stackResources.dbCluster.sg.id,
-//     secretArn: stackResources.dbCluster.secret.arn
-// };
-// export const cacheCluster = {
-//     securityGroupId: stackResources.cacheCluster.sg.id,
-//     clusterAddress: stackResources.cacheCluster.cluster.clusterAddress
-// };
-//
+export const dbCluster = {
+    securityGroupId: stackResources.dbCluster.sg.id,
+    secretArn: stackResources.dbCluster.secret.arn
+};
+export const cacheCluster = {
+    securityGroupId: stackResources.cacheCluster.sg.id,
+    clusterAddress: stackResources.cacheCluster.cluster.clusterAddress
+};
 
-// export const secrets = stackResources.secrets;
 
-// export const bastion = {
-//     ip: stackResources.bastion?.instance?.publicIp,
-//     securityGroupId: stackResources.bastion?.sg.id
-// };
-// export const bucketName =stackResources.bucketName
-// export const websiteNameSpace = "websites"
+export const secrets = stackResources.secrets;
+
+export const bastion = {
+    ip: stackResources.bastion?.instance?.publicIp,
+    securityGroupId: stackResources.bastion?.sg.id
+};
+export const bucketName =stackResources.bucketName
+export const websiteNameSpace = "websites"

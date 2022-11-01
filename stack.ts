@@ -329,108 +329,108 @@ export class CoreStack {
         { name: "external-secrets", policy: ExternalSecretsControllerPolicy },
       ],
     });
-    // const externalSecrets = new k8s.helm.v3.Release(
-    //   "external-secrets",
-    //   {
-    //     chart: "external-secrets",
-    //     version: "0.5.9",
-    //     namespace: "external-secrets",
-    //     values: {
-    //       env: { AWS_REGION: region },
-    //       serviceAccount: {
-    //         create: false,
-    //         name: externalSecretsServiceAccount.name,
-    //       },
-    //     },
-    //     repositoryOpts: {
-    //       repo: "https://charts.external-secrets.io",
-    //     },
-    //   },
-    //   { provider, deleteBeforeReplace: true }
-    // );
-    // const secretStore = new k8s.apiextensions.CustomResource(
-    //   "external-secrets-secret-store",
-    //   {
-    //     apiVersion: "external-secrets.io/v1beta1",
-    //     kind: "ClusterSecretStore",
-    //     metadata: {
-    //       name: "secretstore-aws",
-    //       namespace: "external-secrets",
-    //     },
-    //     spec: {
-    //       provider: {
-    //         aws: {
-    //           service: "SecretsManager",
-    //           region,
-    //           auth: {
-    //             jwt: {
-    //               serviceAccountRef: {
-    //                 name: externalSecretsServiceAccount.name,
-    //                 namespace: "external-secrets",
-    //               },
-    //             },
-    //           },
-    //         },
-    //       },
-    //     },
-    //   },
-    //   { dependsOn: externalSecrets, provider, deleteBeforeReplace: true }
-    // );
-    // new k8s.apiextensions.CustomResource(
-    //   "db-external-secret",
-    //   {
-    //     apiVersion: "external-secrets.io/v1beta1",
-    //     kind: "ClusterExternalSecret",
-    //     metadata: {
-    //       name: "db-secret",
-    //       namespace: "external-secrets",
-    //     },
-    //     spec: {
-    //       namespaceSelector: {
-    //         matchLabels: { "kubernetes.io/metadata.name": websitesNamespace },
-    //       },
-    //       externalSecretName: "db-secret",
-    //       externalSecretSpec: {
-    //         secretStoreRef: {
-    //           name: "secretstore-aws",
-    //           kind: "ClusterSecretStore",
-    //         },
-    //         target: {
-    //           name: "database",
-    //           creationPolicyOwner: "Owner",
-    //         },
-    //         data: [
-    //           {
-    //             secretKey: "DB_PASSWORD",
-    //             remoteRef: {
-    //               key: this.dbCluster.secret.name,
-    //               property: "password",
-    //             },
-    //           },
-    //           {
-    //             secretKey: "DB_HOST",
-    //             remoteRef: {
-    //               key: this.dbCluster.secret.name,
-    //               property: "host",
-    //             },
-    //           },
-    //           {
-    //             secretKey: "DB_USERNAME",
-    //             remoteRef: {
-    //               key: this.dbCluster.secret.name,
-    //               property: "username",
-    //             },
-    //           },
-    //         ],
-    //       },
-    //     },
-    //   },
-    //   { dependsOn: secretStore }
-    // );
+    const externalSecrets = new k8s.helm.v3.Release(
+      "external-secrets",
+      {
+        chart: "external-secrets",
+        version: "0.5.9",
+        namespace: "external-secrets",
+        values: {
+          env: { AWS_REGION: region },
+          serviceAccount: {
+            create: false,
+            name: externalSecretsServiceAccount.name,
+          },
+        },
+        repositoryOpts: {
+          repo: "https://charts.external-secrets.io",
+        },
+      },
+      { provider, deleteBeforeReplace: true }
+    );
+    const secretStore = new k8s.apiextensions.CustomResource(
+      "external-secrets-secret-store",
+      {
+        apiVersion: "external-secrets.io/v1beta1",
+        kind: "ClusterSecretStore",
+        metadata: {
+          name: "secretstore-aws",
+          namespace: "external-secrets",
+        },
+        spec: {
+          provider: {
+            aws: {
+              service: "SecretsManager",
+              region,
+              auth: {
+                jwt: {
+                  serviceAccountRef: {
+                    name: externalSecretsServiceAccount.name,
+                    namespace: "external-secrets",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      { dependsOn: externalSecrets, provider, deleteBeforeReplace: true }
+    );
+    new k8s.apiextensions.CustomResource(
+      "db-external-secret",
+      {
+        apiVersion: "external-secrets.io/v1beta1",
+        kind: "ClusterExternalSecret",
+        metadata: {
+          name: "db-secret",
+          namespace: "external-secrets",
+        },
+        spec: {
+          namespaceSelector: {
+            matchLabels: { "kubernetes.io/metadata.name": websitesNamespace },
+          },
+          externalSecretName: "db-secret",
+          externalSecretSpec: {
+            secretStoreRef: {
+              name: "secretstore-aws",
+              kind: "ClusterSecretStore",
+            },
+            target: {
+              name: "database",
+              creationPolicyOwner: "Owner",
+            },
+            data: [
+              {
+                secretKey: "DB_PASSWORD",
+                remoteRef: {
+                  key: this.dbCluster.secret.name,
+                  property: "password",
+                },
+              },
+              {
+                secretKey: "DB_HOST",
+                remoteRef: {
+                  key: this.dbCluster.secret.name,
+                  property: "host",
+                },
+              },
+              {
+                secretKey: "DB_USERNAME",
+                remoteRef: {
+                  key: this.dbCluster.secret.name,
+                  property: "username",
+                },
+              },
+            ],
+          },
+        },
+      },
+      { dependsOn: secretStore }
+    );
 
     // Ingress & Load balancer
     const albServiceAccount = new ServiceAccount({
-      name: `${stack}-lb-controller`,
+      name: `aws-load-balancer-controller`,
       oidcProvider: clusterOidcProvider,
       cluster: this.cluster,
       namespace: automationNamespace,
@@ -438,17 +438,19 @@ export class CoreStack {
     });
     new k8s.helm.v3.Release("aws-load-balancer-controller", {
       chart: "aws-load-balancer-controller",
+      // name: "aws-load-balancer-controller",
       version: "1.4.5",
       namespace: automationNamespace,
       values: {
         clusterName,
-        env: { AWS_REGION: region },
+        env: { AWS_REGION: region, },
         serviceAccount: { create: false, name: albServiceAccount.name },
         serviceMonitor: {
           enabled: true,
           additionalLabels: { release: "prometheus" },
           namespace: automationNamespace,
         },
+        cleanupOnFail: true
       },
       repositoryOpts: {
         repo: "https://aws.github.io/eks-charts",
@@ -478,7 +480,6 @@ export class CoreStack {
                 https: "80",
               },
               annotations: {
-                // 'service.beta.kubernetes.io/aws-load-balancer-ssl-cert': certificates[0],
                 "external-dns.alpha.kubernetes.io/hostname": domains.toString(),
                 "service.beta.kubernetes.io/aws-load-balancer-ssl-cert": pulumi
                   .all(certificates)
@@ -527,15 +528,15 @@ export class CoreStack {
       { provider, deleteBeforeReplace: true }
     );
 
-    const externalDnsSA = new ServiceAccount({
-      name: "external-dns",
-      oidcProvider: clusterOidcProvider,
-      cluster: this.cluster,
-      namespace: automationNamespace,
-      inlinePolicies: [
-        { name: "external-dns", policy: ExternalDnsControllerPolicy },
-      ],
-    });
+    // const externalDnsSA = new ServiceAccount({
+    //   name: "external-dns",
+    //   oidcProvider: clusterOidcProvider,
+    //   cluster: this.cluster,
+    //   namespace: automationNamespace,
+    //   inlinePolicies: [
+    //     { name: "external-dns", policy: ExternalDnsControllerPolicy },
+    //   ],
+    // });
     const cloudflareConfig = new pulumi.Config("cloudflare");
     new k8s.core.v1.Secret("cloudflare-credentials", {
       metadata: {
@@ -563,7 +564,7 @@ export class CoreStack {
             },
           },
         ],
-        serviceAccount: { create: false, name: externalDnsSA.name },
+        serviceAccount: { create: true},
         provider: "cloudflare",
       },
       repositoryOpts: {
@@ -594,7 +595,7 @@ export class CoreStack {
             channel: `${stack}-website-deployments`,
             user: "flagger",
             clusterName,
-            url: "https://hooks.slack.com/services/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",
+            url: config.requireSecret("flagger-slack-webhook")
           },
         },
         repositoryOpts: {
@@ -690,6 +691,7 @@ export class CoreStack {
     new k8s.helm.v3.Release("aws-efs-csi-driver", {
       chart: "aws-efs-csi-driver",
       namespace: "kube-system",
+      name: "aws-efs-csi-driver-08d85bf2",
       values: {
         fileSystemId: efs.id,
         directoryPerms: 777,
@@ -889,7 +891,7 @@ export class CoreStack {
     this.bucketName = "dating-sites-staging";
     //
     this.kubeconfig = this.cluster.kubeconfig;
-    configClusterExternalSecret("aws-credentials", {
+    configClusterExternalSecret("aws-user-credentials", {
       namespace: websitesNamespace,
       keys: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
     });

@@ -1,6 +1,5 @@
 import * as awsx from "@pulumi/awsx";
 import { BastionHost } from "./constructs/bastion";
-import { Output } from "@pulumi/pulumi/output";
 import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 import * as aws from "@pulumi/aws";
@@ -12,12 +11,9 @@ import {
 import * as eks from "@pulumi/eks";
 import { ServiceAccount } from "./constructs/k8s/serviceAccount";
 import { AutoScalerControllerPolicy } from "./constructs/policies";
-import { splitIntoChunk } from "./constructs/helpers";
 import { REDIS_PORT, RedisCluster } from "./constructs/redis";
 import { region } from "./index";
 import { EfsEksVolume } from "./constructs/k8s/efs";
-import { CloudflareAcmCertificateV2 } from "./constructs/cloudfareCertificate";
-import { allDomains, CloudflareDomain } from "./configs/domains";
 import { configClusterExternalSecret } from "./constructs/secrets";
 import { GrafanaK8s } from "./constructs/grafana";
 import { EksCluster } from "./constructs/eks";
@@ -29,23 +25,23 @@ import {
 import { Flagger } from "./constructs/k8s/flagger";
 import { K8sObservability } from "./constructs/k8s/observability";
 import { AwsNginxIngress } from "./constructs/k8s/ingress";
-import {controllerAffinity, coreControllerTaint} from "./configs/consts";
-import {websitesMap} from "./configs/siteMap";
+import { controllerAffinity, coreControllerTaint } from "./configs/consts";
+import { websitesMap } from "./configs/siteMap";
+import { DnsConfiguration } from "./constructs/dns";
 
 export class CoreStack {
   readonly vpc: awsx.ec2.Vpc;
   readonly cluster: eks.Cluster;
-  readonly clusterOidcProvider:aws.iam.OpenIdConnectProvider;
+  readonly clusterOidcProvider: aws.iam.OpenIdConnectProvider;
   readonly dbCluster: AuroraPostgresqlServerlessCluster;
   readonly cacheCluster: RedisCluster;
   readonly bastion?: BastionHost;
-  readonly kubeconfig: pulumi.Output<any>;
-  readonly bucket: aws.s3.Bucket
+  readonly bucket: aws.s3.Bucket;
   readonly websiteSecrets: string[];
 
   constructor(stack: string, props: CoreStackProps) {
     const config = new pulumi.Config();
-    const tags = { stack:stack };
+    const tags = { stack: stack };
     const clusterName = `${stack}-eks-cluster`;
 
     this.vpc = new Vpc(
@@ -58,49 +54,22 @@ export class CoreStack {
       tags
     ).vpc;
 
-    // DNS
-    const certificates: any[] = [];
-    const domains: string[] = [];
-    // @ts-ignore
-    splitIntoChunk(allDomains, 5).forEach(
-      (domainChunk: CloudflareDomain[], chunkIndex) => {
-        const subjectAlternativeNames: string[] = [];
-        domainChunk.forEach((cloudflareDomain, index) => {
-          const domainName = props.subdomain
-            ? `${props.subdomain}.${cloudflareDomain.domain}`
-            : cloudflareDomain.domain;
-
-          // Use first domain as root in certificate
-          if (index !== 0) subjectAlternativeNames.push(domainName);
-          domains.push(domainName);
-          subjectAlternativeNames.push(`*.${domainName}`);
-        });
-        const certificate = new CloudflareAcmCertificateV2(
-          `${stack}-${chunkIndex}-certificate`,
-          {
-            domainName: props.subdomain
-              ? `${props.subdomain}.${domainChunk[0].domain}`
-              : domainChunk[0].domain,
-            subdomain: props.subdomain,
-            subjectAlternativeNames,
-          }
-        );
-        certificates.push(certificate.arn);
-      }
-    );
-
     // Databases
 
     this.cacheCluster = new RedisCluster(stack, {
       name: "cache",
       vpc: this.vpc,
     });
-    this.dbCluster = new AuroraPostgresqlServerlessCluster(stack, {
-      databaseName: "website",
-      vpc: this.vpc,
-      masterPassword: config.requireSecret("dbPassword"),
-      masterUsername: config.requireSecret("dbUsername"),
-    }, tags);
+    this.dbCluster = new AuroraPostgresqlServerlessCluster(
+      stack,
+      {
+        databaseName: "website",
+        vpc: this.vpc,
+        masterPassword: config.requireSecret("dbPassword"),
+        masterUsername: config.requireSecret("dbUsername"),
+      },
+      tags
+    );
 
     if (props.sshKeyName) {
       this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
@@ -124,10 +93,14 @@ export class CoreStack {
 
     // EKS cluster configuration
 
-    const { cluster, clusterOidcProvider } = new EksCluster(stack, {
-      vpc: this.vpc,
-      clusterName,
-    }, tags);
+    const { cluster, clusterOidcProvider } = new EksCluster(
+      stack,
+      {
+        vpc: this.vpc,
+        clusterName,
+      },
+      tags
+    );
     this.cluster = cluster;
     this.clusterOidcProvider = clusterOidcProvider;
 
@@ -223,7 +196,7 @@ export class CoreStack {
       { dependsOn: secretStore }
     );
 
-    this.websiteSecrets = []
+    this.websiteSecrets = [];
     websitesMap.forEach((site) => {
       const db = props.databasePerSite
         ? new AuroraPostgresqlServerlessCluster(stack, {
@@ -235,14 +208,19 @@ export class CoreStack {
             masterUsername: config.requireSecret("dbUsername"),
           })
         : this.dbCluster;
-      const name =`${site.siteId}-${site.name}-database`
+      const name = `${site.siteId}-${site.name}-database`;
       new DatabaseExternalSecret(stack, {
         secretStore,
         name,
         namespace: websitesNamespace,
         secretsManagerSecretName: db.secret.name,
       });
-      this.websiteSecrets.push(name)
+      this.websiteSecrets.push(name);
+    });
+
+    const { domains, certificates } = new DnsConfiguration(stack, {
+      subdomain: props.subdomain,
+      namespace: automationNamespace,
     });
 
     // Ingress & Load balancer
@@ -254,44 +232,6 @@ export class CoreStack {
       clusterName,
       domains,
       certificates,
-    });
-
-    const cloudflareConfig = new pulumi.Config("cloudflare");
-    new k8s.core.v1.Secret("cloudflare-credentials", {
-      metadata: {
-        name: "cloudflare-credentials",
-        namespace: automationNamespace,
-      },
-      stringData: {
-        CF_API_TOKEN: cloudflareConfig.requireSecret("apiToken"),
-      },
-    });
-    new k8s.helm.v3.Release("helm-external-dns", {
-      chart: "external-dns",
-      name: "external-dns",
-      version: "1.11.0",
-      namespace: automationNamespace,
-      values: {
-        extraArgs: ["--cloudflare-proxied"],
-        env: [
-          {
-            name: "CF_API_TOKEN",
-            valueFrom: {
-              secretKeyRef: {
-                name: "cloudflare-credentials",
-                key: "CF_API_TOKEN",
-              },
-            },
-          },
-        ],
-        serviceAccount: { create: true },
-        provider: "cloudflare",
-        affinity: controllerAffinity,
-        tolerations: [coreControllerTaint],
-      },
-      repositoryOpts: {
-        repo: "https://kubernetes-sigs.github.io/external-dns/",
-      },
     });
 
     // Grafana & Prometheus
@@ -313,19 +253,16 @@ export class CoreStack {
         },
       }
     );
-    const prometheusReaderSecretDefault = new k8s.core.v1.Secret(
-      "prometheus-reader-secret-default",
-      {
-        metadata: {
-          name: "prometheus-reader",
-          namespace: "default",
-        },
-        stringData: {
-          username,
-          password: config.requireSecret("prometheus_reader_key"),
-        },
-      }
-    );
+    new k8s.core.v1.Secret("prometheus-reader-secret-default", {
+      metadata: {
+        name: "prometheus-reader",
+        namespace: "default",
+      },
+      stringData: {
+        username,
+        password: config.requireSecret("prometheus_reader_key"),
+      },
+    });
 
     new GrafanaK8s(stack, clusterName, prometheusUrl, lokiUrl, username);
 
@@ -385,11 +322,11 @@ export class CoreStack {
             metrics: { serviceMonitor: { enabled: true } },
           },
           recommender: {
-              affinity: controllerAffinity,
+            affinity: controllerAffinity,
             tolerations: [coreControllerTaint],
           },
           updater: {
-              affinity: controllerAffinity,
+            affinity: controllerAffinity,
             tolerations: [coreControllerTaint],
           },
         },
@@ -450,7 +387,5 @@ export class CoreStack {
         protect: true,
       }
     );
-
-    this.kubeconfig = this.cluster.kubeconfig;
   }
 }

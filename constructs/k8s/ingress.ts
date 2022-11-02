@@ -5,6 +5,7 @@ import { region } from "../../index";
 import * as pulumi from "@pulumi/pulumi";
 import * as eks from "@pulumi/eks";
 import * as aws from "@pulumi/aws";
+import {controllerAffinity, coreControllerTaint} from "../../configs/consts";
 
 export interface AwsNginxIngressProps {
   provider: k8s.Provider;
@@ -33,6 +34,7 @@ export class AwsNginxIngress {
       // name: "aws-load-balancer-controller",
       version: "1.4.5",
       namespace,
+
       values: {
         clusterName,
         env: { AWS_REGION: region },
@@ -43,6 +45,8 @@ export class AwsNginxIngress {
           namespace
         },
         cleanupOnFail: true,
+        affinity: controllerAffinity,
+        tolerations: [coreControllerTaint],
       },
       repositoryOpts: {
         repo: "https://aws.github.io/eks-charts",

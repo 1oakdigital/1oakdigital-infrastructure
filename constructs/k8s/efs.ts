@@ -4,6 +4,11 @@ import { ServiceAccount } from "./serviceAccount";
 import { EfsPolicy } from "../policies";
 import * as awsx from "@pulumi/awsx";
 import * as eks from "@pulumi/eks";
+import {
+  controllerAffinity,
+  coreControllerTaint,
+  workerTaint,
+} from "../../configs/consts";
 
 export interface EfsEksVolumeProps {
   vpc: awsx.ec2.Vpc;
@@ -12,7 +17,7 @@ export interface EfsEksVolumeProps {
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
 }
 
-const wwwDataId = 82;
+const wwwDataId = "82";
 
 export class EfsEksVolume {
   constructor(
@@ -58,13 +63,17 @@ export class EfsEksVolume {
           repository:
             "602401143452.dkr.ecr.eu-west-2.amazonaws.com/eks/aws-efs-csi-driver",
         },
-        controller: { serviceAccount: { create: false, name: efsSA.name } },
+        node: { tolerations: [workerTaint, workerTaint] },
+        controller: {
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
+          serviceAccount: { create: false, name: efsSA.name },
+        },
       },
       repositoryOpts: {
         repo: "https://kubernetes-sigs.github.io/aws-efs-csi-driver/",
       },
     });
-
 
     new k8s.storage.v1.StorageClass(
       `${stack}-website-sc`,
@@ -74,10 +83,10 @@ export class EfsEksVolume {
         },
         mountOptions: ["tls"],
         parameters: {
-          directoryPerms: "700",
+          directoryPerms: "777",
           fileSystemId: efs.id,
           provisioningMode: "efs-ap",
-          gidRangeStart: "1000",
+          gidRangeStart: "1",
           gidRangeEnd: "2000",
           basePath: "/dynamic_provisioning",
         },

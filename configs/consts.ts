@@ -17,9 +17,20 @@ export const spotTaint = {
 export const workerTaint = {
   key: "type",
   value: "worker",
-  effect: "NO_SCHEDULE",
+  effect: "NoSchedule",
 };
 export const websiteTaint = {
+  key: "type",
+  value: "website",
+  effect: "NoSchedule",
+};
+
+export const workerTaintEks = {
+  key: "type",
+  value: "worker",
+  effect: "NO_SCHEDULE",
+};
+export const websiteTaintEks = {
   key: "type",
   value: "website",
   effect: "NO_SCHEDULE",

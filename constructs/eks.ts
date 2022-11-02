@@ -2,7 +2,7 @@ import * as aws from "@pulumi/aws";
 import * as eks from "@pulumi/eks";
 import * as awsx from "@pulumi/awsx";
 import { createNodeRole } from "./helpers";
-import {coreControllerTaintEks, websiteTaint, workerTaint} from "../configs/consts";
+import {coreControllerTaintEks, websiteTaint, websiteTaintEks, workerTaint, workerTaintEks} from "../configs/consts";
 
 export interface EksClusterProps {
   vpc: awsx.ec2.Vpc;
@@ -119,11 +119,11 @@ export class EksCluster {
       instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
       subnetIds: props.vpc.privateSubnetIds,
       capacityType: "SPOT",
-      taints: [websiteTaint],
+      taints: [websiteTaintEks],
       labels: websiteLabels,
       tags:websiteLabels,
       scalingConfig: {
-        maxSize: 10,
+        maxSize: 30,
         minSize: 1,
         desiredSize: 1,
       },
@@ -137,11 +137,11 @@ export class EksCluster {
       instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
       subnetIds: props.vpc.privateSubnetIds,
       capacityType: "SPOT",
-      taints: [workerTaint],
+      taints: [workerTaintEks],
       labels: workerLabels,
       tags: workerLabels,
       scalingConfig: {
-        maxSize: 10,
+        maxSize: 30,
         minSize: 1,
         desiredSize: 1,
       },
@@ -160,7 +160,7 @@ export class EksCluster {
         taints: [coreControllerTaintEks],
         tags: controllerLabels,
         scalingConfig: {
-          maxSize: 5,
+          maxSize: 10,
           minSize: 1,
           desiredSize: 1,
         },

@@ -1,6 +1,6 @@
 import * as k8s from "@pulumi/kubernetes";
-import * as aws from "@pulumi/aws";
 import { Output } from "@pulumi/pulumi/output";
+import { controllerAffinity, coreControllerTaint } from "../../configs/consts";
 
 export interface K8sObservabilityProps {
   provider: k8s.Provider;
@@ -10,7 +10,7 @@ export interface K8sObservabilityProps {
 
 export class K8sObservability {
   constructor(stack: string, props: K8sObservabilityProps) {
-    const { namespace,  provider, prometheusReaderSecret } = props;
+    const { namespace, provider, prometheusReaderSecret } = props;
 
     new k8s.helm.v3.Release(
       "metrics-server",
@@ -19,9 +19,10 @@ export class K8sObservability {
         version: "3.8.2",
         name: "metrics-server",
         namespace: "kube-system",
-        // values: {
-        //   hostNetwork: { enabled: true },
-        // },
+        values: {
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
+        },
         repositoryOpts: {
           repo: "https://kubernetes-sigs.github.io/metrics-server",
         },
@@ -43,6 +44,8 @@ export class K8sObservability {
             },
           },
           verticalPodAutoscaler: { enabled: true },
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
         },
         repositoryOpts: {
           repo: "https://prometheus-community.github.io/helm-charts",
@@ -59,6 +62,10 @@ export class K8sObservability {
         repositoryOpts: {
           repo: "https://kubernetes.github.io/dashboard",
         },
+        values: {
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
+        },
       },
       { provider, deleteBeforeReplace: true }
     );
@@ -72,6 +79,8 @@ export class K8sObservability {
         metricsServer: {
           enabled: true,
         },
+      // affinity: controllerAffinity,
+      // tolerations: [coreControllerTaint],
         prometheus: {
           metricServer: {
             enabled: true,
@@ -79,7 +88,7 @@ export class K8sObservability {
             podMonitor: {
               enabled: true,
               additionalLabels: { release: "prometheus" },
-              namespace,
+            namespace,
             },
           },
         },
@@ -89,32 +98,32 @@ export class K8sObservability {
       },
     });
 
-    if(prometheusReaderSecret)
-    new k8s.apiextensions.CustomResource(
-      "keda-prometheus-trigger-auth",
-      {
-        apiVersion: "keda.sh/v1alpha1",
-        kind: "ClusterTriggerAuthentication",
-        metadata: {
-          name: "keda-prometheus",
-          // labels
+    if (prometheusReaderSecret)
+      new k8s.apiextensions.CustomResource(
+        "keda-prometheus-trigger-auth",
+        {
+          apiVersion: "keda.sh/v1alpha1",
+          kind: "ClusterTriggerAuthentication",
+          metadata: {
+            name: "keda-prometheus",
+            // labels
+          },
+          spec: {
+            secretTargetRef: [
+              {
+                parameter: "username",
+                name: prometheusReaderSecret,
+                key: "username",
+              },
+              {
+                parameter: "password",
+                name: prometheusReaderSecret,
+                key: "password",
+              },
+            ],
+          },
         },
-        spec: {
-          secretTargetRef: [
-            {
-              parameter: "username",
-              name: prometheusReaderSecret,
-              key: "username",
-            },
-            {
-              parameter: "password",
-              name: prometheusReaderSecret,
-              key: "password",
-            },
-          ],
-        },
-      }, {dependsOn:[keda]}
-    );
-
+        { dependsOn: [keda] }
+      );
   }
 }

@@ -214,7 +214,8 @@ export class GrafanaK8s {
         ],
         namespaceSelector: {
           matchNames: [
-            namespace
+            namespace,
+              "websites"
           ]
         },
         selector: {
@@ -273,7 +274,8 @@ export class GrafanaK8s {
           ],
           namespaceSelector: {
             matchNames: [
-              namespace
+              namespace,
+              "websites"
             ]
           },
           selector: {

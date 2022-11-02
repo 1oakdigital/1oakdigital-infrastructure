@@ -13,6 +13,8 @@ export interface CoreStackProps {
   numberOfNatGateways?: number;
   numberOfAvailabilityZones?: number;
   skipCertValidation?: boolean;
+  // Each website will have its own database cluster
+  databasePerSite?: boolean;
 }
 
 export interface CertificateArgs extends AcmCertificateArgs {
@@ -20,17 +22,6 @@ export interface CertificateArgs extends AcmCertificateArgs {
   skipValidation?: boolean;
 }
 
-export interface AuroraPostgresqlClusterProps {
-  masterUsername: string | pulumi.Output<string>;
-  vpc: awsx.ec2.Vpc;
-  masterPassword: string | pulumi.Output<string>;
-  databaseName?: string;
-  instanceClass?: string;
-  backupRetentionPeriod?: number;
-  engineVersion?: string;
-  dbClusterParameterGroupName?: string;
-  snapshotIdentifier?: string;
-}
 
 export interface RedisClusterProps {
   name?: string;

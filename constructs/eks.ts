@@ -1,18 +1,17 @@
 import * as aws from "@pulumi/aws";
 import * as eks from "@pulumi/eks";
 import * as awsx from "@pulumi/awsx";
-import {createNodeRole} from "./helpers";
-
-
+import { createNodeRole } from "./helpers";
+import {coreControllerTaintEks, websiteTaint, workerTaint} from "../configs/consts";
 
 export interface EksClusterProps {
-  vpc:awsx.ec2.Vpc,
-  clusterName:string
+  vpc: awsx.ec2.Vpc;
+  clusterName: string;
 }
 
 export class EksCluster {
-  readonly cluster: eks.Cluster
-  readonly clusterOidcProvider: aws.iam.OpenIdConnectProvider
+  readonly cluster: eks.Cluster;
+  readonly clusterOidcProvider: aws.iam.OpenIdConnectProvider;
 
   constructor(
     stack: string,
@@ -65,11 +64,19 @@ export class EksCluster {
       endpointPublicAccess: true,
       encryptionConfigKeyArn: clusterKey.arn,
       instanceRoles: [nodeRole],
+      roleMappings: [
+      {
+          groups: ["system:masters"],
+          roleArn: "arn:aws:iam::707053725174:role/dev-cluster-admin-role",
+          username:'arn:aws:iam::707053725174:role/dev-cluster-admin-role'
+        }
+      ],
       nodeGroupOptions: {
         instanceType: "t3.medium",
         instanceProfile: profile,
         extraNodeSecurityGroups: [nodeSg],
       },
+      tags: tags
     });
     const clusterName = this.cluster.eksCluster.name;
     // @ts-ignore
@@ -104,22 +111,61 @@ export class EksCluster {
       },
     });
 
+    const websiteLabels = { "compute-type": "spot", type: "website" };
+    new eks.ManagedNodeGroup(`${stack}-website-ng`, {
+      cluster: this.cluster,
+      nodeGroupName: `${stack}-website-ng`,
+      nodeRoleArn: nodeRole.arn,
+      instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
+      subnetIds: props.vpc.privateSubnetIds,
+      capacityType: "SPOT",
+      taints: [websiteTaint],
+      labels: websiteLabels,
+      tags:websiteLabels,
+      scalingConfig: {
+        maxSize: 10,
+        minSize: 1,
+        desiredSize: 1,
+      },
+    });
 
-    // eks.createManagedNodeGroup(
-    //         `${stack}-ng-managed-ondemand`, {
-    //           cluster: this.cluster,
-    //           nodeGroupName: `${stack}-ng-managed-ondemand`,
-    //           nodeRoleArn: nodeRole.arn,
-    //           instanceTypes: ['t3a.large', 't3.large'],
-    //
-    //           subnetIds: this.vpc.privateSubnetIds,
-    //           labels: { ondemand: 'true' },
-    //           scalingConfig: {
-    //             maxSize: 3,
-    //             minSize: 2,
-    //             desiredSize: 3
-    //           }
-    //         }, this.cluster
-    // )
+    const workerLabels = { "compute-type": "spot", type: "worker" };
+    new eks.ManagedNodeGroup(`${stack}-worker-ng`, {
+      cluster: this.cluster,
+      nodeGroupName: `${stack}-worker-ng`,
+      nodeRoleArn: nodeRole.arn,
+      instanceTypes: ["t3.large", "t3a.large", "m4.large", "m5.large"],
+      subnetIds: props.vpc.privateSubnetIds,
+      capacityType: "SPOT",
+      taints: [workerTaint],
+      labels: workerLabels,
+      tags: workerLabels,
+      scalingConfig: {
+        maxSize: 10,
+        minSize: 1,
+        desiredSize: 1,
+      },
+    });
+
+    const controllerLabels = { "compute-type": "ondemand", type: "controller" };
+    eks.createManagedNodeGroup(
+      `${stack}-controller-ng`,
+      {
+        cluster: this.cluster,
+        nodeGroupName: `${stack}-controller-ng`,
+        nodeRoleArn: nodeRole.arn,
+        instanceTypes: ["t3a.medium", "t3.medium"],
+        subnetIds: props.vpc.privateSubnetIds,
+        labels: controllerLabels,
+        taints: [coreControllerTaintEks],
+        tags: controllerLabels,
+        scalingConfig: {
+          maxSize: 5,
+          minSize: 1,
+          desiredSize: 1,
+        },
+      },
+      this.cluster
+    );
   }
 }

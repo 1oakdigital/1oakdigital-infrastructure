@@ -3,7 +3,7 @@ import * as pulumi from "@pulumi/pulumi";
 import { Output } from "@pulumi/pulumi/output";
 import { CertificateArgs } from "./types";
 import * as cloudflare from "@pulumi/cloudflare";
-import { CloudflareDomain, domainZoneMap } from "./domains";
+import { CloudflareDomain, domainZoneMap } from "../configs/domains";
 
 export class CloudflareAcmCertificate {
   readonly certificate: aws.acm.Certificate;

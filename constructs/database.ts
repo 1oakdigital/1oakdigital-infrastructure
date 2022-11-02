@@ -1,6 +1,22 @@
 import * as aws from "@pulumi/aws";
-import {AuroraPostgresqlClusterProps} from "./types";
 import * as pulumi from "@pulumi/pulumi";
+import * as awsx from "@pulumi/awsx";
+
+export interface AuroraPostgresqlClusterProps {
+  masterUsername: string | pulumi.Output<string>;
+  vpc: awsx.ec2.Vpc;
+  masterPassword: string | pulumi.Output<string>;
+  databaseName?: string;
+  instanceClass?: string;
+  backupRetentionPeriod?: number;
+  engineVersion?: string;
+  dbClusterParameterGroupName?: string;
+  snapshotIdentifier?: string;
+
+  maxCapacity?:number
+  minCapacity?:number
+}
+
 
 export const DB_PORT = 3306
 export class AuroraPostgresqlServerlessCluster {
@@ -37,8 +53,8 @@ export class AuroraPostgresqlServerlessCluster {
                 engineMode: "provisioned",
                 engineVersion: "8.0.mysql_aurora.3.02.1",
                 serverlessv2ScalingConfiguration: {
-                    maxCapacity: 1,
-                    minCapacity: 0.5,
+                    maxCapacity: props.maxCapacity ?? 1,
+                    minCapacity: props.minCapacity ?? 0.5,
                 },
                 masterUsername: props.masterUsername,
                 masterPassword: props.masterPassword,

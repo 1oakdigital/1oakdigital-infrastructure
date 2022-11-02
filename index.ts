@@ -25,7 +25,6 @@ if (stack == 'dev') {
     subdomain: "v2"
   })
 }
-// export const kubeconfig = stackResources.kubeconfig
 export const vpc = {
   id: stackResources.vpc.vpcId,
   privateSubnetsIds: stackResources.vpc.privateSubnetIds,
@@ -37,7 +36,8 @@ export const eksCluster = {
   arn: stackResources.cluster.eksCluster.arn,
   name: stackResources.cluster.eksCluster.name,
   nodeSecurityGroup: stackResources.cluster.nodeSecurityGroup.id,
-  clusterSecurityGroup: stackResources.cluster.clusterSecurityGroup.id
+  clusterSecurityGroup: stackResources.cluster.clusterSecurityGroup.id,
+  clusterOidcProvider: stackResources.clusterOidcProvider,
 }
 export const dbCluster = {
     securityGroupId: stackResources.dbCluster.sg.id,
@@ -49,11 +49,14 @@ export const cacheCluster = {
 };
 
 
-export const secrets = stackResources.secrets;
+export const websiteSecrets = stackResources.websiteSecrets;
 
 export const bastion = {
     ip: stackResources.bastion?.instance?.publicIp,
     securityGroupId: stackResources.bastion?.sg.id
 };
-export const bucketName =stackResources.bucketName
+export const bucket = {
+    arn:stackResources.bucket.arn,
+    name:stackResources.bucket.bucket
+}
 export const websiteNameSpace = "websites"

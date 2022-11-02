@@ -19,9 +19,9 @@ export class K8sObservability {
         version: "3.8.2",
         name: "metrics-server",
         namespace: "kube-system",
-        values: {
-          hostNetwork: { enabled: true },
-        },
+        // values: {
+        //   hostNetwork: { enabled: true },
+        // },
         repositoryOpts: {
           repo: "https://kubernetes-sigs.github.io/metrics-server",
         },

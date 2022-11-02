@@ -17,37 +17,46 @@ import { REDIS_PORT, RedisCluster } from "./constructs/redis";
 import { region } from "./index";
 import { EfsEksVolume } from "./constructs/k8s/efs";
 import { CloudflareAcmCertificateV2 } from "./constructs/cloudfareCertificate";
-import { allDomains, CloudflareDomain } from "./constructs/domains";
-import { configClusterExternalSecret } from "./secrets";
+import { allDomains, CloudflareDomain } from "./configs/domains";
+import { configClusterExternalSecret } from "./constructs/secrets";
 import { GrafanaK8s } from "./constructs/grafana";
 import { EksCluster } from "./constructs/eks";
 import { Vpc } from "./constructs/vpc";
-import { ExternalSecrets } from "./constructs/k8s/externalSecrets";
+import {
+  DatabaseExternalSecret,
+  ExternalSecrets,
+} from "./constructs/k8s/externalSecrets";
 import { Flagger } from "./constructs/k8s/flagger";
 import { K8sObservability } from "./constructs/k8s/observability";
 import { AwsNginxIngress } from "./constructs/k8s/ingress";
+import {controllerAffinity, coreControllerTaint} from "./configs/consts";
+import {websitesMap} from "./configs/siteMap";
 
 export class CoreStack {
   readonly vpc: awsx.ec2.Vpc;
   readonly cluster: eks.Cluster;
+  readonly clusterOidcProvider:aws.iam.OpenIdConnectProvider;
   readonly dbCluster: AuroraPostgresqlServerlessCluster;
   readonly cacheCluster: RedisCluster;
   readonly bastion?: BastionHost;
-  readonly secrets?: { [name: string]: Output<string> };
-  // readonly cfCertificate: CloudflareAcmCertificate
   readonly kubeconfig: pulumi.Output<any>;
-  readonly bucketName: pulumi.Output<string> | string;
+  readonly bucket: aws.s3.Bucket
+  readonly websiteSecrets: string[];
 
   constructor(stack: string, props: CoreStackProps) {
     const config = new pulumi.Config();
-    const tags = { stack };
+    const tags = { stack:stack };
     const clusterName = `${stack}-eks-cluster`;
 
-    this.vpc = new Vpc(stack, {
-      clusterName,
-      cidrBlock: props.cidrBlock ?? "10.0.0.0/18",
-      numberOfAvailabilityZones: props.numberOfAvailabilityZones ?? 3,
-    }).vpc;
+    this.vpc = new Vpc(
+      stack,
+      {
+        clusterName,
+        cidrBlock: props.cidrBlock ?? "10.0.0.0/18",
+        numberOfAvailabilityZones: props.numberOfAvailabilityZones ?? 3,
+      },
+      tags
+    ).vpc;
 
     // DNS
     const certificates: any[] = [];
@@ -91,10 +100,10 @@ export class CoreStack {
       vpc: this.vpc,
       masterPassword: config.requireSecret("dbPassword"),
       masterUsername: config.requireSecret("dbUsername"),
-    });
+    }, tags);
 
     if (props.sshKeyName) {
-      this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName);
+      this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
       new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
         type: "ingress",
         fromPort: DB_PORT,
@@ -118,8 +127,9 @@ export class CoreStack {
     const { cluster, clusterOidcProvider } = new EksCluster(stack, {
       vpc: this.vpc,
       clusterName,
-    });
+    }, tags);
     this.cluster = cluster;
+    this.clusterOidcProvider = clusterOidcProvider;
 
     // Default namespaces
     const automationNamespace = "automation";
@@ -213,11 +223,33 @@ export class CoreStack {
       { dependsOn: secretStore }
     );
 
+    this.websiteSecrets = []
+    websitesMap.forEach((site) => {
+      const db = props.databasePerSite
+        ? new AuroraPostgresqlServerlessCluster(stack, {
+            databaseName: `${stack}-${site.name}`,
+            vpc: this.vpc,
+            minCapacity: 0.5,
+            maxCapacity: 3,
+            masterPassword: config.requireSecret("dbPassword"),
+            masterUsername: config.requireSecret("dbUsername"),
+          })
+        : this.dbCluster;
+      const name =`${site.siteId}-${site.name}-database`
+      new DatabaseExternalSecret(stack, {
+        secretStore,
+        name,
+        namespace: websitesNamespace,
+        secretsManagerSecretName: db.secret.name,
+      });
+      this.websiteSecrets.push(name)
+    });
+
     // Ingress & Load balancer
     new AwsNginxIngress(stack, {
       cluster,
       clusterOidcProvider,
-      namespace:automationNamespace,
+      namespace: automationNamespace,
       provider,
       clusterName,
       domains,
@@ -254,6 +286,8 @@ export class CoreStack {
         ],
         serviceAccount: { create: true },
         provider: "cloudflare",
+        affinity: controllerAffinity,
+        tolerations: [coreControllerTaint],
       },
       repositoryOpts: {
         repo: "https://kubernetes-sigs.github.io/external-dns/",
@@ -330,6 +364,8 @@ export class CoreStack {
             selector: { release: "prometheus" },
             namespace: "kube-system",
           },
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
         },
         repositoryOpts: {
           repo: "https://kubernetes.github.io/autoscaler",
@@ -344,9 +380,20 @@ export class CoreStack {
         version: "6.0.0",
         values: {
           admissionController: {
+            affinity: controllerAffinity,
+            tolerations: [coreControllerTaint],
             metrics: { serviceMonitor: { enabled: true } },
           },
+          recommender: {
+              affinity: controllerAffinity,
+            tolerations: [coreControllerTaint],
+          },
+          updater: {
+              affinity: controllerAffinity,
+            tolerations: [coreControllerTaint],
+          },
         },
+        cleanupOnFail: true,
         repositoryOpts: {
           repo: "https://cowboysysop.github.io/charts/",
         },
@@ -385,13 +432,25 @@ export class CoreStack {
       file: "config/cloudwatch-config.yaml",
     });
 
-    // // TODO Import bucket construct
-    this.bucketName = "dating-sites-staging";
-    //
-    this.kubeconfig = this.cluster.kubeconfig;
     configClusterExternalSecret("aws-user-credentials", {
       namespace: websitesNamespace,
       keys: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
     });
+
+    // TODO import Prod
+    this.bucket = new aws.s3.Bucket(
+      `${stack}-websites-bucket`,
+      {
+        arn: "arn:aws:s3:::dating-sites-staging",
+        bucket: "dating-sites-staging",
+        hostedZoneId: "Z3GKZC51ZF0DB4",
+        requestPayer: "BucketOwner",
+      },
+      {
+        protect: true,
+      }
+    );
+
+    this.kubeconfig = this.cluster.kubeconfig;
   }
 }

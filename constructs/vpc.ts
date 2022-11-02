@@ -19,7 +19,7 @@ export class Vpc {
       cidrBlock: props.cidrBlock ?? "10.0.0.0/18",
       numberOfAvailabilityZones: props.numberOfAvailabilityZones ?? 3,
       natGateways: { strategy: NatGatewayStrategy.Single },
-      tags: { name: `${stack}-vpc` },
+      tags: { name: `${stack}-vpc`, ...tags },
       enableDnsHostnames: true,
     });
 

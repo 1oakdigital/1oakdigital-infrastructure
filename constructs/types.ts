@@ -8,7 +8,7 @@ export interface CoreStackProps {
   domains?: string[];
   subdomain?: string;
   cidrBlock?: string;
-  sshKeyName?: string;
+  sshKeyName: string;
   replication?: boolean;
   numberOfNatGateways?: number;
   numberOfAvailabilityZones?: number;

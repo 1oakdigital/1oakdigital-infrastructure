@@ -90,8 +90,6 @@ export class AwsNginxIngress {
                   "internet-facing",
                 "service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":
                   "3600",
-                "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol":
-                  "*",
                 "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type":
                   "instance",
                 "service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy":

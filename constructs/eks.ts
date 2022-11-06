@@ -106,8 +106,8 @@ export class EksCluster {
       labels: { "compute-type": "spot" },
       scalingConfig: {
         maxSize: 10,
-        minSize: 5,
-        desiredSize: 5,
+        minSize: 1,
+        desiredSize: 1,
       },
     });
 

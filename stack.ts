@@ -35,7 +35,7 @@ export class CoreStack {
   readonly clusterOidcProvider: aws.iam.OpenIdConnectProvider;
   readonly dbCluster: AuroraPostgresqlServerlessCluster;
   readonly cacheCluster: RedisCluster;
-  readonly bastion?: BastionHost;
+  readonly bastion: BastionHost;
   readonly bucket: aws.s3.Bucket;
   readonly websiteSecrets: string[];
 
@@ -71,17 +71,17 @@ export class CoreStack {
       tags
     );
 
-    if (props.sshKeyName) {
-      this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
-      new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
-        type: "ingress",
-        fromPort: DB_PORT,
-        toPort: DB_PORT,
-        protocol: "tcp",
-        securityGroupId: this.bastion.sg.id,
-        sourceSecurityGroupId: this.dbCluster.sg.id,
-      });
-      new aws.ec2.SecurityGroupRule(`${stack}-bastion-redis-rule`, {
+
+    this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
+    new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
+      type: "ingress",
+      fromPort: DB_PORT,
+      toPort: DB_PORT,
+      protocol: "tcp",
+      securityGroupId: this.bastion.sg.id,
+      sourceSecurityGroupId: this.dbCluster.sg.id,
+    });
+    new aws.ec2.SecurityGroupRule(`${stack}-bastion-redis-rule`, {
         type: "ingress",
         fromPort: REDIS_PORT,
         toPort: REDIS_PORT,
@@ -89,7 +89,6 @@ export class CoreStack {
         securityGroupId: this.bastion.sg.id,
         sourceSecurityGroupId: this.cacheCluster.sg.id,
       });
-    }
 
     // EKS cluster configuration
 
@@ -344,6 +343,9 @@ export class CoreStack {
       cluster,
       clusterOidcProvider,
       provider,
+      securityGroups: [
+          this.bastion.sg.id
+      ]
     });
 
     // Metrics & Observability

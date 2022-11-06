@@ -6,15 +6,17 @@ import * as awsx from "@pulumi/awsx";
 import * as eks from "@pulumi/eks";
 import {
   controllerAffinity,
-  coreControllerTaint,
+  coreControllerTaint, websiteTaint,
   workerTaint,
 } from "../../configs/consts";
+import {Output} from "@pulumi/pulumi/output";
 
 export interface EfsEksVolumeProps {
   vpc: awsx.ec2.Vpc;
   cluster: eks.Cluster;
   provider: k8s.Provider;
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
+  securityGroups: Output<string>[]
 }
 
 const wwwDataId = "82";
@@ -43,12 +45,14 @@ export class EfsEksVolume {
           fileSystemId: efs.id,
           subnetId,
           securityGroups: [
+            ...props.securityGroups,
             cluster.nodeSecurityGroup.id,
             cluster.clusterSecurityGroup.id,
           ],
         });
       })
     );
+
     new k8s.helm.v3.Release("aws-efs-csi-driver", {
       chart: "aws-efs-csi-driver",
       namespace: "kube-system",
@@ -57,13 +61,13 @@ export class EfsEksVolume {
         fileSystemId: efs.id,
         directoryPerms: 777,
         provisioningMode: "efs-ap",
-        uid: wwwDataId,
-        gid: wwwDataId,
+        gidRangeStart: "1",
+        gidRangeEnd: "2000",
         image: {
           repository:
             "602401143452.dkr.ecr.eu-west-2.amazonaws.com/eks/aws-efs-csi-driver",
         },
-        node: { tolerations: [workerTaint, workerTaint] },
+        node: { tolerations: [workerTaint, websiteTaint] },
         controller: {
           affinity: controllerAffinity,
           tolerations: [coreControllerTaint],
@@ -91,33 +95,33 @@ export class EfsEksVolume {
           basePath: "/dynamic_provisioning",
         },
         provisioner: "efs.csi.aws.com",
-        // reclaimPolicy: "Delete",
+        // reclaimPolicy: "Retain",
         // volumeBindingMode: "Immediate"
       },
       { provider: props.cluster.provider }
     );
 
-    // new k8s.core.v1.PersistentVolume(
-    //     `${stack}-${props.name}-pv`,
-    //     {
-    //         metadata: {
-    //             name: `${stack}-${props.name}-pv`,
-    //             namespace: "websites"
-    //         },
-    //         spec: {
-    //             capacity: {storage: "5Gi"},
-    //             volumeMode: "Filesystem",
-    //             accessModes: ["ReadWriteMany"],
-    //             persistentVolumeReclaimPolicy: "Retain",
-    //             storageClassName: `${stack}-${props.name}-sc`,
-    //             csi: {
-    //                 driver: "efs.csi.aws.com",
-    //                 volumeHandle: props.efsId
-    //             }
-    //         }
-    //     },
-    //     {provider: props.cluster.provider}
-    // );
+    new k8s.core.v1.PersistentVolume(
+        `${stack}-website-pv`,
+        {
+            metadata: {
+                name: `${stack}-website-pv`,
+                namespace: "websites"
+            },
+            spec: {
+                capacity: {storage: "5Gi"},
+                volumeMode: "Filesystem",
+                accessModes: ["ReadWriteMany"],
+                persistentVolumeReclaimPolicy: "Retain",
+                storageClassName: `${stack}-website-sc`,
+                csi: {
+                    driver: "efs.csi.aws.com",
+                    volumeHandle: efs.id
+                }
+            }
+        },
+        {provider: props.cluster.provider}
+    );
 
     // new k8s.core.v1.PersistentVolumeClaim(
     //     `${stack}-${props.name}-claim`,

@@ -1,34 +1,34 @@
 import * as awsx from "@pulumi/awsx";
-import { BastionHost } from "./constructs/bastion";
+import {BastionHost} from "./constructs/bastion";
 import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 import * as aws from "@pulumi/aws";
-import { CoreStackProps } from "./constructs/types";
-import {
-  AuroraPostgresqlServerlessCluster,
-  DB_PORT,
-} from "./constructs/database";
+import {CoreStackProps} from "./constructs/types";
+import {AuroraPostgresqlServerlessCluster, DB_PORT,} from "./constructs/database";
 import * as eks from "@pulumi/eks";
-import { ServiceAccount } from "./constructs/k8s/serviceAccount";
-import { AutoScalerControllerPolicy } from "./constructs/policies";
-import { REDIS_PORT, RedisCluster } from "./constructs/redis";
-import { region } from "./index";
-import { EfsEksVolume } from "./constructs/k8s/efs";
-import { configClusterExternalSecret } from "./constructs/secrets";
-import { GrafanaK8s } from "./constructs/grafana";
-import { EksCluster } from "./constructs/eks";
-import { Vpc } from "./constructs/vpc";
-import {
-  DatabaseExternalSecret,
-  ExternalSecrets,
-} from "./constructs/k8s/externalSecrets";
-import { Flagger } from "./constructs/k8s/flagger";
-import { K8sObservability } from "./constructs/k8s/observability";
-import { AwsNginxIngress } from "./constructs/k8s/ingress";
-import { controllerAffinity, coreControllerTaint } from "./configs/consts";
-import { websitesMap } from "./configs/siteMap";
-import { DnsConfiguration } from "./constructs/dns";
+import {ServiceAccount} from "./constructs/k8s/serviceAccount";
+import {AutoScalerControllerPolicy} from "./constructs/policies";
+import {REDIS_PORT, RedisCluster} from "./constructs/redis";
+import {region} from "./index";
+import {EfsEksVolume} from "./constructs/k8s/efs";
+import {GrafanaK8s} from "./constructs/grafana";
+import {EksCluster} from "./constructs/eks";
+import {Vpc} from "./constructs/vpc";
+import {DatabaseExternalSecret, ExternalSecrets,} from "./constructs/k8s/externalSecrets";
+import {Flagger} from "./constructs/k8s/flagger";
+import {K8sObservability} from "./constructs/k8s/observability";
+import {AwsNginxIngress} from "./constructs/k8s/ingress";
+import {controllerAffinity, coreControllerTaint} from "./configs/consts";
+import {websitesDbMap} from "./configs/siteMap";
+import {DnsConfiguration} from "./constructs/dns";
+import {Output} from "@pulumi/pulumi/output";
+import {configClusterExternalSecret} from "./constructs/secrets";
 
+
+export interface websitesSecretsOutput {
+  name:string
+  securityGroupId:Output<string>
+}
 export class CoreStack {
   readonly vpc: awsx.ec2.Vpc;
   readonly cluster: eks.Cluster;
@@ -36,8 +36,8 @@ export class CoreStack {
   readonly dbCluster: AuroraPostgresqlServerlessCluster;
   readonly cacheCluster: RedisCluster;
   readonly bastion: BastionHost;
-  readonly bucket: aws.s3.Bucket;
-  readonly websiteSecrets: string[];
+  readonly bucket?: aws.s3.Bucket;
+  readonly websiteSecrets: {[name:string]:websitesSecretsOutput};
 
   constructor(stack: string, props: CoreStackProps) {
     const config = new pulumi.Config();
@@ -195,11 +195,12 @@ export class CoreStack {
       { dependsOn: secretStore }
     );
 
-    this.websiteSecrets = [];
-    websitesMap.forEach((site) => {
+    this.websiteSecrets = {};
+    websitesDbMap.forEach((sites, index) => {
+      const name = sites.length != 1 ? `websites-${index}` : sites[0].name;
       const db = props.databasePerSite
         ? new AuroraPostgresqlServerlessCluster(stack, {
-            databaseName: `${stack}-${site.name}`,
+            databaseName: name,
             vpc: this.vpc,
             minCapacity: 0.5,
             maxCapacity: 3,
@@ -207,14 +208,17 @@ export class CoreStack {
             masterUsername: config.requireSecret("dbUsername"),
           })
         : this.dbCluster;
-      const name = `${site.siteId}-${site.name}-database`;
+      sites.forEach(site => {
+          const name = `${site.siteId}-${site.name}-database`;
       new DatabaseExternalSecret(stack, {
         secretStore,
         name,
         namespace: websitesNamespace,
         secretsManagerSecretName: db.secret.name,
       });
-      this.websiteSecrets.push(name);
+      this.websiteSecrets[name] = { name, securityGroupId:db.sg.id};
+      }
+      )
     });
 
     const { domains, certificates } = new DnsConfiguration(stack, {

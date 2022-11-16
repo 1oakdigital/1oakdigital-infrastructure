@@ -19,7 +19,6 @@ export interface EfsEksVolumeProps {
   securityGroups: Output<string>[]
 }
 
-const wwwDataId = "82";
 
 export class EfsEksVolume {
   constructor(

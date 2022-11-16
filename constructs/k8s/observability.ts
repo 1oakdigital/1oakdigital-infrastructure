@@ -30,6 +30,23 @@ export class K8sObservability {
       { provider, deleteBeforeReplace: true }
     );
     new k8s.helm.v3.Release(
+      "opentelemetry-operator",
+      {
+        chart: "opentelemetry-operator",
+        version: "0.18.0",
+        name: "opentelemetry-operator",
+        namespace: "automation",
+        values: {
+          admissionWebhooks: {certManager:{enabled: false}},
+          tolerations: [coreControllerTaint],
+        },
+        repositoryOpts: {
+          repo: "https://open-telemetry.github.io/opentelemetry-helm-charts",
+        },
+      },
+      { provider, deleteBeforeReplace: true }
+    );
+    new k8s.helm.v3.Release(
       "kube-state-metrics",
       {
         chart: "kube-state-metrics",

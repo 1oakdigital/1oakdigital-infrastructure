@@ -54,41 +54,7 @@ export class CoreStack {
       tags
     ).vpc;
 
-    // Databases
 
-    this.cacheCluster = new RedisCluster(stack, {
-      name: "cache",
-      vpc: this.vpc,
-    });
-    this.dbCluster = new AuroraPostgresqlServerlessCluster(
-      stack,
-      {
-        databaseName: "website",
-        vpc: this.vpc,
-        masterPassword: config.requireSecret("dbPassword"),
-        masterUsername: config.requireSecret("dbUsername"),
-      },
-      tags
-    );
-
-
-    this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
-    new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
-      type: "ingress",
-      fromPort: DB_PORT,
-      toPort: DB_PORT,
-      protocol: "tcp",
-      securityGroupId: this.bastion.sg.id,
-      sourceSecurityGroupId: this.dbCluster.sg.id,
-    });
-    new aws.ec2.SecurityGroupRule(`${stack}-bastion-redis-rule`, {
-        type: "ingress",
-        fromPort: REDIS_PORT,
-        toPort: REDIS_PORT,
-        protocol: "tcp",
-        securityGroupId: this.bastion.sg.id,
-        sourceSecurityGroupId: this.cacheCluster.sg.id,
-      });
 
     // EKS cluster configuration
 
@@ -143,6 +109,41 @@ export class CoreStack {
       clusterOidcProvider,
       provider,
     });
+
+        // Databases
+
+    this.cacheCluster = new RedisCluster(stack, {
+      name: "cache",
+      vpc: this.vpc,
+    });
+    this.dbCluster = new AuroraPostgresqlServerlessCluster(
+      stack,
+      {
+        databaseName: "website",
+        vpc: this.vpc,
+        masterPassword: config.requireSecret("dbPassword"),
+        masterUsername: config.requireSecret("dbUsername"),
+      },
+      tags
+    );
+
+    this.bastion = new BastionHost(stack, this.vpc, props.sshKeyName, tags);
+    new aws.ec2.SecurityGroupRule(`${stack}-bastion-db-rule`, {
+      type: "ingress",
+      fromPort: DB_PORT,
+      toPort: DB_PORT,
+      protocol: "tcp",
+      securityGroupId: this.bastion.sg.id,
+      sourceSecurityGroupId: this.dbCluster.sg.id,
+    });
+    new aws.ec2.SecurityGroupRule(`${stack}-bastion-redis-rule`, {
+        type: "ingress",
+        fromPort: REDIS_PORT,
+        toPort: REDIS_PORT,
+        protocol: "tcp",
+        securityGroupId: this.bastion.sg.id,
+        sourceSecurityGroupId: this.cacheCluster.sg.id,
+      });
     new k8s.apiextensions.CustomResource(
       "db-external-secret",
       {
@@ -197,10 +198,10 @@ export class CoreStack {
 
     this.websiteSecrets = {};
     websitesDbMap.forEach((sites, index) => {
-      const name = sites.length != 1 ? `websites-${index}` : sites[0].name;
+      const databaseName = sites.length != 1 ? `websites-${index}` : sites[0].name;
       const db = props.databasePerSite
         ? new AuroraPostgresqlServerlessCluster(stack, {
-            databaseName: name,
+            databaseName,
             vpc: this.vpc,
             minCapacity: 0.5,
             maxCapacity: 3,
@@ -210,16 +211,26 @@ export class CoreStack {
         : this.dbCluster;
       sites.forEach(site => {
           const name = `${site.siteId}-${site.name}-database`;
-      new DatabaseExternalSecret(stack, {
-        secretStore,
-        name,
-        namespace: websitesNamespace,
-        secretsManagerSecretName: db.secret.name,
-      });
-      this.websiteSecrets[name] = { name, securityGroupId:db.sg.id};
+          new DatabaseExternalSecret(stack, {
+            secretStore,
+            name,
+            namespace: websitesNamespace,
+            secretsManagerSecretName: db.secret.name,
+          });
+          this.websiteSecrets[site.name] = { name, securityGroupId:db.sg.id};
       }
       )
+       new aws.ec2.SecurityGroupRule(`${databaseName}-bastion-db-rule`, {
+      type: "ingress",
+      fromPort: DB_PORT,
+      toPort: DB_PORT,
+      protocol: "tcp",
+      securityGroupId: this.bastion.sg.id,
+      sourceSecurityGroupId: db.sg.id,
     });
+    });
+
+
 
     const { domains, certificates } = new DnsConfiguration(stack, {
       subdomain: props.subdomain,

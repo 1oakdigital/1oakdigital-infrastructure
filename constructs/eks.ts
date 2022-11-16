@@ -78,9 +78,18 @@ export class EksCluster {
       },
       tags: tags
     });
+
+     new aws.iam.RolePolicyAttachment(`AmazonEKSVPCResourceController-attachment`,
+            {
+              policyArn: "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController",
+              role:  this.cluster.eksCluster.roleArn.apply(roleArn => roleArn.split("/")[1])
+            },
+        );
+
     const clusterName = this.cluster.eksCluster.name;
     // @ts-ignore
     this.clusterOidcProvider = this.cluster.core.oidcProvider;
+    // Must be set once kubectl set env daemonset aws-node -n kube-system ENABLE_POD_ENI=true
     new aws.eks.Addon(`${stack}-vpc-addon`, {
       clusterName,
       addonName: "vpc-cni",

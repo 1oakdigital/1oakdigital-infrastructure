@@ -1,0 +1,67 @@
+name: Deploy Infrastructure
+on:
+  push:
+    branches:
+      - feature/k8s
+      - main
+env:
+  DOCKER_BUILDKIT: 1
+  AWS_DEFAULT_REGION: eu-west-2
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  PULUMI_BUCKET: s3://1oakdigital-pulumi
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PULUMI_VERSION: 3.46.1
+jobs:
+  set-env:
+    name: Install Env Vars based on branch
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.stack.outputs.environment }}
+      release: ${{ steps.stack.outputs.release }}
+    steps:
+      - name: Set env vars
+        id: stack
+        run: |
+          if [[ "${{github.base_ref}}" == "main" || "${{github.ref}}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "wait_for_canary=true" >> $GITHUB_OUTPUT
+          fi
+          if [[ "${{github.base_ref}}" == "feature/k8s" || "${{github.ref}}" == "refs/heads/feature/k8s" ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "wait_for_canary=false" >> $GITHUB_OUTPUT
+          fi
+          echo "release=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+  deploy-pulumi:
+    needs: [set-env]
+    name: Deploy Infrastructure with Pulumi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          cache: 'npm'
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.3.0
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-build-cache-pulumi-node-modules-${{ hashFiles('package-lock.json') }}
+      - run: "cd infrastructure && npm install"
+      - name: Update Kubeconfig
+        run: |
+          export CLUSTER_NAME=$(pulumi stack -s ${{needs.set-env.outputs.environment}} output eksCluster -j | jq .name -r)
+          aws eks update-kubeconfig --region ${{ env.AWS_DEFAULT_REGION }} --name ${{needs.set-env.outputs.environment}}-eks-cluster
+      - uses: pulumi/actions@v3
+        with:
+          command: up
+          stack-name: ${{needs.set-env.outputs.environment}}
+          cloud-url: ${{ env.PULUMI_BUCKET }}
+          diff: true
+          pulumi-version: 3.46.1
+        env:
+          RELEASE: ${{needs.set-env.outputs.release}}
+

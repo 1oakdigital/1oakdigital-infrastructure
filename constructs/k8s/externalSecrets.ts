@@ -214,13 +214,13 @@ export class DatabaseExternalSecret {
                   property: "port",
                 },
               },
-              {
-                secretKey: "DB_NAME",
-                remoteRef: {
-                  key: secretsManagerSecretName,
-                  property: "name",
-                },
-              },
+              // {
+              //   secretKey: "DB_NAME",
+              //   remoteRef: {
+              //     key: secretsManagerSecretName,
+              //     property: "name",
+              //   },
+              // },
             ],
           },
         },

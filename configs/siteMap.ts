@@ -9,6 +9,7 @@ export const websitesDbMap = [
     { name: "duknulla", siteId: "14" },
     { name: "geheimneuken", siteId: "16" },
     { name: "sexosecreto", siteId: "17" },
+    { name: "mycrushfinder", siteId: "9" },
   ],
   [
     { name: "mysecretfeels", siteId: "19" },

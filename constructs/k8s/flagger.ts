@@ -22,7 +22,7 @@ export class Flagger {
       "flagger",
       {
         chart: "flagger",
-        version: "1.22.2",
+        version: "1.25.0",
         namespace,
         values: {
           affinity: controllerAffinity,
@@ -54,7 +54,7 @@ export class Flagger {
 
     new k8s.helm.v3.Release("flagger-loadtester", {
       chart: "loadtester",
-      version: "0.24.0",
+      version: "0.26.0",
       name: "flagger-loadtester",
       namespace,
       values: {
@@ -67,7 +67,7 @@ export class Flagger {
     });
     if (prometheusUrl) {
       const successfulRequests = `sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",status!~"[4-5].*",canary=~".*canary.*"}[2m]))`;
-      const failedRequests = `sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",canary=~".*canary.*"}[2m]))`;
+      const allRequests = `sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",canary=~".*canary.*"}[2m]))`;
       new k8s.apiextensions.CustomResource("flagger-metric-template-requests", {
         apiVersion: "flagger.app/v1beta1",
         kind: "MetricTemplate",
@@ -83,7 +83,7 @@ export class Flagger {
               name: props.prometheusReaderSecret,
             },
           },
-          query: pulumi.interpolate`${successfulRequests} / ${failedRequests}`,
+          query: pulumi.interpolate`${allRequests} / ${successfulRequests}`,
         },
       });
     }

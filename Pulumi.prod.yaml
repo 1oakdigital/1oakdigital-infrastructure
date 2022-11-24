@@ -5,6 +5,18 @@ config:
     secure: v1:N9pUfcmRv9O0ZlK+:amTEowsfw/PDUxMQlUYy8MHT7P1MDyGpvP1cxPH2S/RdxCvX
   1oakdigital-infrastructure:AWS_SECRET_ACCESS_KEY:
     secure: v1:BXM9l7LCfqJaNqMc:AW9pyYvXYA01F5eoeXjxA25XNxPJyuLXHwCYy9ienGsR/ZFHvLtTE6dS/iH6h5Tr1GpfX/mnqnw=
+  1oakdigital-infrastructure:db-admin-password:
+    secure: v1:Jo6mgvfAP8O6ryf3:0zJiHdNtugOvzUbCJ2JkmJSMMAwLzECn114da3IkJ5Xby6PmtWeI2w==
+  1oakdigital-infrastructure:db-live-1-password:
+    secure: v1:sktxn1zhl996e+pA:+CV6ohXID4NpkVxgpwKrywPmC73Y3RMSpjxvV+irj+pQ9stsJT9SwQ==
+  1oakdigital-infrastructure:db-live-2-password:
+    secure: v1:X7BKtznPNaZJwiF2:EUFtKHcpWvixucuV9Hk+2xS80Gj6739qDRuvfZZrrd52D6/RPGsYwg==
+  1oakdigital-infrastructure:db-live-3-password:
+    secure: v1:+mbsg/kvEfgcEK8E:hSTUaJK3Rs+l06f2/djHh60dmIEWrTzUvrIo+1i+ee++GCQ1iE7fIw==
+  1oakdigital-infrastructure:db-live-4-password:
+    secure: v1:eXlmEpHGMzCz9SpR:cMgpLobP+CKyJ0cuShJQ4HWnxEvBjbCnEkXSKqQd7zVPtCzuX1wdJA==
+  1oakdigital-infrastructure:db-live-5-password:
+    secure: v1:9VcgiyEmwVyBDtmr:L7Xd+xoqFMUpQe3vlHqbO5krNKz6RSMMuYx83Bk1YB3kId9LXsL/nw==
   1oakdigital-infrastructure:dbPassword:
     secure: v1:ixId5+gwIhSoTqPM:i0ylinLhQdx0INDQW82CO4OCty8H1ezCy9C37lnGh7mJXPrt4zxbQlo=
   1oakdigital-infrastructure:dbUsername:
@@ -15,6 +27,10 @@ config:
     secure: v1:9MZI1KF+yLqVKUAT:ZHV3y762hd30BuifqTckm8f4GYrEYj5w1V4SZapbumMP1HBC+1orFVwXU1z9IICTANZvnU9buuYeBVvl9LzTMz00hYggO69vBAP58wTiahLnIDjYy8523rArLLi/8Vl5lMqknf4aijkNy3L2+UR4JfqZmGyRn7UehaZVfF2uPcWcwUo8TRMtHqz8LNdOhcqkM4S3zFBnvk8XLkGz
   1oakdigital-infrastructure:loki_username:
     secure: v1:JQMVC0EENG9XsTHT:H3OFa25avuARY/5RpX2vSv43eKZDbw==
+  1oakdigital-infrastructure:maxOnDemandWebsiteInstances: "10"
+  1oakdigital-infrastructure:maxSpotWebsiteInstances: "10"
+  1oakdigital-infrastructure:minOnDemandWebsiteInstances: "1"
+  1oakdigital-infrastructure:minSpotWebsiteInstances: "1"
   1oakdigital-infrastructure:prometheus_pusher_key:
     secure: v1:NxyO1/EBzqoqMZuF:zfwFKDaiv4kk3vhB8LDLXeMcauPvN9yagx2c2KGYlyPIjVDxR/Te3NsYBVNxZvXkHam/kkJUvrAMLhzW6SEele0Uq90MxS4MgAnFmfWgi3jIK00N/ddPQmvdBd93yFByhfvGB/U915ciaU3CUG1IH6nID9G0BzcuNLcmdJR9g9t+QGKIWIi22w==
   1oakdigital-infrastructure:prometheus_reader_key:

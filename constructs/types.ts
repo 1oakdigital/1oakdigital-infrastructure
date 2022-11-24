@@ -15,6 +15,8 @@ export interface CoreStackProps {
   skipCertValidation?: boolean;
   // Each website will have its own database cluster
   databasePerSite?: boolean;
+  nginxMinReplicas?: number;
+  nginxMaxReplicas?: number;
 }
 
 export interface CertificateArgs extends AcmCertificateArgs {

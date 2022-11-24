@@ -10,17 +10,19 @@ import {
   workerTaint,
 } from "../../configs/consts";
 import {Output} from "@pulumi/pulumi/output";
+import {OutputInstance} from "@pulumi/pulumi";
 
 export interface EfsEksVolumeProps {
   vpc: awsx.ec2.Vpc;
   cluster: eks.Cluster;
   provider: k8s.Provider;
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
-  securityGroups: Output<string>[]
+  securityGroups: OutputInstance<(string | Output<string>)[]>
 }
 
 
 export class EfsEksVolume {
+  fileSystemId:Output<string>
   constructor(
     stack: string,
     props: EfsEksVolumeProps,
@@ -31,6 +33,7 @@ export class EfsEksVolume {
       encrypted: true,
       creationToken: `${stack}-website-fs`,
     });
+    this.fileSystemId = efs.id
     const efsSA = new ServiceAccount({
       name: "efs",
       oidcProvider: props.clusterOidcProvider,
@@ -43,11 +46,7 @@ export class EfsEksVolume {
         new aws.efs.MountTarget(`${stack}-website-${subnetId}-mtg`, {
           fileSystemId: efs.id,
           subnetId,
-          securityGroups: [
-            ...props.securityGroups,
-            cluster.nodeSecurityGroup.id,
-            cluster.clusterSecurityGroup.id,
-          ],
+          securityGroups: props.securityGroups
         });
       })
     );
@@ -122,23 +121,5 @@ export class EfsEksVolume {
         {provider: props.cluster.provider}
     );
 
-    // new k8s.core.v1.PersistentVolumeClaim(
-    //     `${stack}-${props.name}-claim`,
-    //     {
-    //         metadata: {
-    //             name: `${stack}-${props.name}-claim`,
-    //             namespace: "websites",
-    //             // annotations: {
-    //             //     "volume.beta.kubernetes.io/storage-class": `${stack}-${props.name}-sc`
-    //             // }
-    //         },
-    //         spec: {
-    //             accessModes: ["ReadWriteMany"],
-    //             storageClassName: `${stack}-${props.name}-sc`,
-    //             resources: {requests: {storage: "5Gi"}}
-    //         }
-    //     },
-    //     {provider: props.cluster.provider}
-    // );
   }
 }

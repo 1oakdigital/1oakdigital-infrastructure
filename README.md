@@ -54,10 +54,24 @@ the encryption key.
 pulumi stack init <stack> --secrets-provider="awskms://alias/pulumi?region=us-east-1"
 ```
 
+
+### [CRD2Pulumi](https://github.com/pulumi/crd2pulumi)
+Installation
+```bash
+brew install pulumi/tap/crd2pulumi
+````
+Usage
+```bash
+crd2pulumi --nodejs local.yaml # loading local file
+crd2pulumi --nodejs https://raw.githubusercontent.com/fluxcd/flagger/main/artifacts/flagger/crd.yaml # Loading CRDs from github
+```
+
 ## Layout
 - index.ts - Main Pulumi file which deploys imported code
 - stacks/ - Folder containing stack classes
 - stacks/constructs/ - Reusable resource constructs which are used in stacks
+- stacks/constructs/k8s - construct deployed inside Kubernetes cluster
+- crd - Custom CRDS loaded with crd2pulumi tool
 
 
 ## Packages used
@@ -80,8 +94,6 @@ pulumi stack init <stack> --secrets-provider="awskms://alias/pulumi?region=us-ea
 - [ElastiCache for Redis](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/WhatIs.html)
 - [Elastic File System (EFS)](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)
 - [Elastic container registry (ECR)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html)
-
-
 
 
 - [EKS cluster](https://docs.aws.amazon.com/eks/latest/userguide/clusters.html)

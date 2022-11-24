@@ -1,3 +1,21 @@
 name: 1oakdigital-infrastructure
 description: A TypeScript program to create a Kubernetes cluster on AWS
 runtime: nodejs
+config:
+  aws:region: eu-west-2
+  minOnDemandWebsiteInstances:
+    type: integer
+    description: the number of max replica count to create for deployment
+    default: 1
+  maxOnDemandWebsiteInstances:
+    type: integer
+    description: the number of minimal replica count to create for deployment
+    default: 10
+  minSpotWebsiteInstances:
+    type: integer
+    description: the number of max replica count to create for deployment
+    default: 1
+  maxSpotWebsiteInstances:
+    type: integer
+    description: the number of minimal replica count to create for deployment
+    default: 10

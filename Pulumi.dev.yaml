@@ -23,6 +23,8 @@ config:
     secure: v1:FQ0Bmti1NQ7RbIZz:u4dwnbQleLK1hWv1/sqX8d/ZTQdaUg==
   1oakdigital-infrastructure:prometheus_user:
     secure: v1:RqPDa3hWNrR1f/io:B3+ga8WVN8YyQ1QqAv8xUQRWG/9vRQ==
+  1oakdigital-infrastructure:sourceDbPassword:
+    secure: v1:/tJucjXSnpPPCF+1:jvd+1N/JbmHa14h32KvHIPc7bYphNDCVtv4V43haIAw=
   aws:region: eu-west-2
   cloudflare:apiToken:
     secure: v1:6KU1GL0UZAwzC3/T:9hF66r8ZHYXB4yARiCL0r3SUGfzceELt1OBQhxag2+QSq4B3Fqrn381p9pkDmczCUneJnninBNw=

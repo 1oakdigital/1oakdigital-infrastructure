@@ -75,6 +75,7 @@ export class AuroraPostgresqlServerlessCluster {
         )
 
         new aws.rds.ClusterInstance(`${constructName}-db-cluster-instance-writer`, {
+
             clusterIdentifier: this.cluster.id,
             instanceClass: "db.serverless",
             engine: "aurora-mysql",

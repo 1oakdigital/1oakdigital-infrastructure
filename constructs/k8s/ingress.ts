@@ -15,7 +15,8 @@ export interface AwsNginxIngressProps {
   certificates: any[];
   cluster: eks.Cluster;
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
-
+  minReplicas?:number
+  maxReplicas?:number
 }
 
 export class AwsNginxIngress {
@@ -63,8 +64,8 @@ export class AwsNginxIngress {
           controller: {
             autoscaling: {
               enabled: true,
-              minReplicas: 1,
-              maxReplicas: 2,
+              minReplicas: props.minReplicas ?? 1,
+              maxReplicas: props.maxReplicas ?? 2,
             },
             containerPort: {
               http: 80,
@@ -113,6 +114,12 @@ export class AwsNginxIngress {
               "prometheus.io/scrape": "true",
               "prometheus.io/port": "10254",
             },
+            config: {
+              'http-snippet': `proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=static-cache:2m max_size=100m inactive=7d use_temp_path=off;
+                proxy_cache_key $scheme$proxy_host$request_uri;
+                proxy_cache_lock on;
+                proxy_cache_use_stale updating;`
+            }
           },
         },
         repositoryOpts: {

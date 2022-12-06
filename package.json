@@ -13,8 +13,9 @@
     },
     "dependencies": {
         "@lbrlabs/pulumi-grafana": "^0.0.4",
-        "@pulumi/awsx": ">=1.0.0-beta.10",
         "@pulumi/aws": "5.21.0",
+        "@pulumi/aws-iam": "^0.0.6",
+        "@pulumi/awsx": ">=1.0.0-beta.10",
         "@pulumi/cloudflare": "^4.12.1",
         "@pulumi/eks": ">=0.42.7 ",
         "@pulumi/kubernetes": "^3.22.1",

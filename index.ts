@@ -19,6 +19,9 @@ if (stack == "dev") {
     sshKeyName: stack,
     nginxMinReplicas: 1,
     nginxMaxReplicas: 2,
+    redisNodeType: "cache.t4g.medium",
+    websitesDbMaxCapacity: 1,
+    websitesDbMinCapacity: 0.5,
   });
 } else if (stack == "prod") {
   stackResources = new CoreStack(stack, {
@@ -26,8 +29,23 @@ if (stack == "dev") {
     sshKeyName: stack,
     subdomain: "v2",
     databasePerSite: true,
-    nginxMinReplicas: 1,
-    nginxMaxReplicas: 2,
+    nginxMinReplicas: 2,
+    nginxMaxReplicas: 3,
+    redisNodeType: "cache.t4g.medium",
+    websitesDbMaxCapacity: 1,
+    websitesDbMinCapacity: 0.5,
+  });
+} else if (stack == "base") {
+  stackResources = new CoreStack(stack, {
+    cidrBlock: "10.0.0.0/16",
+    sshKeyName: stack,
+    subdomain: "v2",
+    databasePerSite: true,
+    nginxMinReplicas: 2,
+    nginxMaxReplicas: 3,
+    redisNodeType: "cache.t4g.medium",
+    websitesDbMaxCapacity: 1,
+    websitesDbMinCapacity: 0.5,
   });
 }
 export const vpc = {

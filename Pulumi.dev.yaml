@@ -11,10 +11,16 @@ config:
     secure: v1:bdZ8t8p+VpKVhV33:dVhEmtqHXbbOvbLID55RHV2RtCwTxtUKP1qjEQ==
   1oakdigital-infrastructure:flagger-slack-webhook:
     secure: v1:J2DyWMsRfidBLQ/C:9HifkL6dPTbV/m/WgJy4eo0MhRMApXeyObSB4gMVui3XjQUvtpoSOSAX5yqypKfbPNQVLp3h7xKWkCTecK8gPCPF+w8OV9F3gPADCdhRnsnM//8vTaNw1LIwNVq3m3Oysg==
+  1oakdigital-infrastructure:githubToken:
+    secure: v1:VDW/CIOxHTnUVErq:L9x07zDFpwTwvj9wTlhbtCg+0JwINDsnG+L4vQmT/D/VFlhTT74FIH+c6OVD/iDMoCJmADUHJaw=
   1oakdigital-infrastructure:loki_password:
     secure: v1:6Jx0AT+3nYpAIyyk:X7jz1tcGwVI7C3IjVSxL4bF/YEO/DaXEsZKM7SRSk1wU+75YirPwTXBNAXi5UMT5veDaggnmvM2Oj2vstwTCaOVfygJyDjVY9/RYUgZ14VKQw52NFOpxzobMkCEfbctNE8rYsvTOvakCAAGduzSFNKzidJtUCaP+9XbcQ2JdZSUq5kCV6Yc3dvMdJbjh+5E6pTgSF1CKz0ENGn3C
   1oakdigital-infrastructure:loki_username:
     secure: v1:8wuymb4ZzcT2BfAj:SbJjW/0fXHFgVeYoI6eQvpSM47Nb0w==
+  1oakdigital-infrastructure:maxOnDemandWebsiteInstances: "0"
+  1oakdigital-infrastructure:maxSpotWebsiteInstances: "30"
+  1oakdigital-infrastructure:minOnDemandWebsiteInstances: "0"
+  1oakdigital-infrastructure:minSpotWebsiteInstances: "1"
   1oakdigital-infrastructure:prometheus_pusher_key:
     secure: v1:V4KUrTu3eNOtXELx:o7Qlpp23zH3wZHHaGg048xIrlCoODKohyDx+WUn1jb57iItlxwWWewsBb1ivLaaIyzrg68VpjRmNWiU9A+VtbmlObRs51BTuBdf+dx/3Q78elJV+NfUxQ6z2EG55OH6qGjXO/SXsJuUkCegTF/SamCseUzDF5X6lwr5AQD+Q102/iGpEcX8aDw==
   1oakdigital-infrastructure:prometheus_reader_key:

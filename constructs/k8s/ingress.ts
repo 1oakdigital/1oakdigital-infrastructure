@@ -5,7 +5,7 @@ import { region } from "../../index";
 import * as pulumi from "@pulumi/pulumi";
 import * as eks from "@pulumi/eks";
 import * as aws from "@pulumi/aws";
-import {controllerAffinity, coreControllerTaint} from "../../configs/consts";
+import { controllerAffinity, coreControllerTaint } from "../../configs/consts";
 
 export interface AwsNginxIngressProps {
   provider: k8s.Provider;
@@ -15,13 +15,14 @@ export interface AwsNginxIngressProps {
   certificates: any[];
   cluster: eks.Cluster;
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
-  minReplicas?:number
-  maxReplicas?:number
+  minReplicas?: number;
+  maxReplicas?: number;
 }
 
 export class AwsNginxIngress {
   constructor(stack: string, props: AwsNginxIngressProps) {
-    const { namespace, provider, clusterOidcProvider, cluster, clusterName} = props;
+    const { namespace, provider, clusterOidcProvider, cluster, clusterName } =
+      props;
 
     const albServiceAccount = new ServiceAccount({
       name: `aws-load-balancer-controller`,
@@ -43,7 +44,7 @@ export class AwsNginxIngress {
         serviceMonitor: {
           enabled: true,
           additionalLabels: { release: "prometheus" },
-          namespace
+          namespace,
         },
         cleanupOnFail: true,
         affinity: controllerAffinity,
@@ -77,7 +78,8 @@ export class AwsNginxIngress {
                 https: "80",
               },
               annotations: {
-                "external-dns.alpha.kubernetes.io/hostname": props.domains.toString(),
+                "external-dns.alpha.kubernetes.io/hostname":
+                  props.domains.toString(),
                 "service.beta.kubernetes.io/aws-load-balancer-ssl-cert": pulumi
                   .all(props.certificates)
                   .apply((certificates) => certificates.toString()),
@@ -92,7 +94,7 @@ export class AwsNginxIngress {
                 "service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":
                   "3600",
                 "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type":
-                  "instance",
+                  "ip",
                 "service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy":
                   "ELBSecurityPolicy-TLS13-1-2-2021-06",
               },
@@ -115,11 +117,11 @@ export class AwsNginxIngress {
               "prometheus.io/port": "10254",
             },
             config: {
-              'http-snippet': `proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=static-cache:2m max_size=100m inactive=7d use_temp_path=off;
+              "http-snippet": `proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=static-cache:2m max_size=100m inactive=7d use_temp_path=off;
                 proxy_cache_key $scheme$proxy_host$request_uri;
                 proxy_cache_lock on;
-                proxy_cache_use_stale updating;`
-            }
+                proxy_cache_use_stale updating;`,
+            },
           },
         },
         repositoryOpts: {

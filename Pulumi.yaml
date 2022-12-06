@@ -10,7 +10,7 @@ config:
   maxOnDemandWebsiteInstances:
     type: integer
     description: the number of minimal replica count to create for deployment
-    default: 10
+    default: 5
   minSpotWebsiteInstances:
     type: integer
     description: the number of max replica count to create for deployment

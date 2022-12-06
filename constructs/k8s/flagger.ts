@@ -4,13 +4,14 @@ import { Config } from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { Output } from "@pulumi/pulumi/output";
 import { controllerAffinity, coreControllerTaint } from "../../configs/consts";
+import { MetricTemplate } from "../../crds/flagger/flagger/v1beta1/metricTemplate";
 
 export interface FlaggerProps {
   provider: k8s.Provider;
   clusterOidcProvider: aws.iam.OpenIdConnectProvider;
   namespace: string;
   prometheusUrl?: string;
-  prometheusReaderSecret?: string | Output<string>;
+  prometheusReaderSecret: string | Output<string>;
   clusterName: string;
 }
 
@@ -68,9 +69,7 @@ export class Flagger {
     if (prometheusUrl) {
       const successfulRequests = `sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",status!~"[4-5].*",canary=~".*canary.*"}[2m]))`;
       const allRequests = `sum(rate(nginx_ingress_controller_requests{cluster="${clusterName}",ingress="{{ target }}",canary=~".*canary.*"}[2m]))`;
-      new k8s.apiextensions.CustomResource("flagger-metric-template-requests", {
-        apiVersion: "flagger.app/v1beta1",
-        kind: "MetricTemplate",
+      new MetricTemplate("flagger-metric-template-requests", {
         metadata: {
           name: "requests",
           namespace,

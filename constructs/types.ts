@@ -2,7 +2,7 @@ import { CertificateArgs as AcmCertificateArgs } from "@pulumi/aws/acm/certifica
 import * as pulumi from "@pulumi/pulumi";
 import * as awsx from "@pulumi/awsx";
 import * as eks from "@pulumi/eks";
-import {Output} from "@pulumi/pulumi/output";
+import { Output } from "@pulumi/pulumi/output";
 
 export interface CoreStackProps {
   domains?: string[];
@@ -17,13 +17,17 @@ export interface CoreStackProps {
   databasePerSite?: boolean;
   nginxMinReplicas?: number;
   nginxMaxReplicas?: number;
+  websitesDbMaxCapacity?: number;
+  websitesDbMinCapacity?: number;
+  adminDbMaxCapacity?: number;
+  adminDbMinCapacity?: number;
+  redisNodeType?: string;
 }
 
 export interface CertificateArgs extends AcmCertificateArgs {
   zoneId: string;
   skipValidation?: boolean;
 }
-
 
 export interface RedisClusterProps {
   name?: string;
@@ -33,9 +37,8 @@ export interface RedisClusterProps {
 }
 
 export interface EfsProps {
-  cluster:eks.Cluster;
-  vpc:awsx.ec2.Vpc;
-  name:string
-  efsId:string | Output<string>
+  cluster: eks.Cluster;
+  vpc: awsx.ec2.Vpc;
+  name: string;
+  efsId: string | Output<string>;
 }
-

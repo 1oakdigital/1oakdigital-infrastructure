@@ -9,10 +9,7 @@ import {
   DB_PORT,
 } from "./constructs/database";
 import * as eks from "@pulumi/eks";
-import { ServiceAccount } from "./constructs/k8s/serviceAccount";
-import { AutoScalerControllerPolicy } from "./constructs/policies";
 import { REDIS_PORT, RedisCluster } from "./constructs/redis";
-import { region } from "./index";
 import { EfsEksVolume } from "./constructs/k8s/efs";
 import { GrafanaK8s } from "./constructs/grafana";
 import { EksCluster } from "./constructs/eks";
@@ -29,7 +26,8 @@ import { websitesDbMap } from "./configs/siteMap";
 import { DnsConfiguration } from "./constructs/dns";
 import { Output } from "@pulumi/pulumi/output";
 import { DmsReplication } from "./constructs/replication";
-import { configClusterExternalSecret } from "./constructs/secrets";
+import { HorizontalRunnerAutoscaler } from "./crds/github/horizontalrunnerautoscalers/actions/v1alpha1/horizontalRunnerAutoscaler";
+import { RunnerDeployment } from "./crds/github/deployment/actions/v1alpha1/runnerDeployment";
 
 export interface websitesSecretsOutput {
   name: string;
@@ -74,13 +72,6 @@ export class CoreStack {
     );
     this.cluster = cluster;
     this.clusterOidcProvider = clusterOidcProvider;
-    const nodeSecurityGroupsIds = aws.ec2
-      .getSecurityGroupsOutput({
-        tags: {
-          "aws:eks:cluster-name": `${stack}-eks-cluster`,
-        },
-      })
-      .apply((nodeSecurityGroups) => nodeSecurityGroups.ids);
 
     // Default namespaces
     const automationNamespace = "automation";
@@ -128,23 +119,18 @@ export class CoreStack {
     this.cacheCluster = new RedisCluster(stack, {
       name: "cache",
       vpc: this.vpc,
+      nodeType: props.redisNodeType,
     });
     // Allow node to connect to redis cluster
-    nodeSecurityGroupsIds.apply((nodeSecurityGroupsIds) =>
-      nodeSecurityGroupsIds.forEach((nodeSecurityGroupId) => {
-        new aws.ec2.SecurityGroupRule(
-          `${nodeSecurityGroupId}-node-redis-rule`,
-          {
-            type: "ingress",
-            fromPort: REDIS_PORT,
-            toPort: REDIS_PORT,
-            protocol: "tcp",
-            securityGroupId: this.cacheCluster.sg.id,
-            sourceSecurityGroupId: nodeSecurityGroupId,
-          }
-        );
-      })
-    );
+    new aws.ec2.SecurityGroupRule(`node-redis-rule`, {
+      type: "ingress",
+      fromPort: REDIS_PORT,
+      toPort: REDIS_PORT,
+      protocol: "tcp",
+      securityGroupId: this.cacheCluster.sg.id,
+      sourceSecurityGroupId: cluster.nodeSecurityGroup.id,
+    });
+
     this.dbCluster = new AuroraPostgresqlServerlessCluster(
       stack,
       {
@@ -152,6 +138,8 @@ export class CoreStack {
         vpc: this.vpc,
         masterPassword: config.requireSecret("dbPassword"),
         masterUsername: config.requireSecret("dbUsername"),
+        minCapacity: props.adminDbMinCapacity || 1,
+        maxCapacity: props.adminDbMaxCapacity || 5,
       },
       tags
     );
@@ -234,8 +222,8 @@ export class CoreStack {
         ? new AuroraPostgresqlServerlessCluster(stack, {
             databaseName,
             vpc: this.vpc,
-            minCapacity: 0.5,
-            maxCapacity: 5,
+            minCapacity: props.websitesDbMinCapacity || 0.5,
+            maxCapacity: props.websitesDbMaxCapacity || 5,
             masterPassword: config.requireSecret("dbPassword"),
             masterUsername: config.requireSecret("dbUsername"),
           })
@@ -271,26 +259,19 @@ export class CoreStack {
           sourceSecurityGroupId: this.bastion.sg.id,
         });
         // Allow node to connect to each database
-        nodeSecurityGroupsIds.apply((nodeSecurityGroupsIds) =>
-          nodeSecurityGroupsIds.forEach((nodeSecurityGroupId) => {
-            new aws.ec2.SecurityGroupRule(
-              `${databaseName}-${nodeSecurityGroupId}-node-db-rule`,
-              {
-                type: "ingress",
-                fromPort: DB_PORT,
-                toPort: DB_PORT,
-                protocol: "tcp",
-                securityGroupId: db.sg.id,
-                sourceSecurityGroupId: nodeSecurityGroupId,
-              }
-            );
-          })
-        );
+        new aws.ec2.SecurityGroupRule(`${databaseName}-node-db-rule`, {
+          type: "ingress",
+          fromPort: DB_PORT,
+          toPort: DB_PORT,
+          protocol: "tcp",
+          securityGroupId: db.sg.id,
+          sourceSecurityGroupId: cluster.nodeSecurityGroup.id,
+        });
       }
     });
 
     // TODO Delete replication after migration is done
-    if (stack === "prod")
+    if (stack === "prod") {
       replicationMapping["admin"] = {
         serverName: this.dbCluster.cluster.endpoint,
         password: this.dbCluster.cluster.masterPassword,
@@ -299,10 +280,11 @@ export class CoreStack {
         databaseName: this.dbCluster.cluster.databaseName,
         sgId: this.dbCluster.sg.id,
       };
-    new DmsReplication(stack, {
-      vpc: this.vpc,
-      replicationMapping,
-    });
+      new DmsReplication(stack, {
+        vpc: this.vpc,
+        replicationMapping,
+      });
+    }
 
     const { domains, certificates } = new DnsConfiguration(stack, {
       subdomain: props.subdomain,
@@ -321,6 +303,16 @@ export class CoreStack {
       minReplicas: props.nginxMinReplicas,
       maxReplicas: props.nginxMaxReplicas,
     });
+
+    // Volumes
+    const efs = new EfsEksVolume(stack, {
+      vpc: this.vpc,
+      cluster,
+      clusterOidcProvider,
+      provider,
+      securityGroups: [this.bastion.sg.id, this.cluster.nodeSecurityGroup.id],
+    });
+    this.efsFileSystemId = efs.fileSystemId;
 
     // Grafana & Prometheus
 
@@ -352,7 +344,14 @@ export class CoreStack {
       },
     });
 
-    new GrafanaK8s(stack, clusterName, prometheusUrl, lokiUrl, username);
+    new GrafanaK8s(
+      stack,
+      clusterName,
+      prometheusUrl,
+      lokiUrl,
+      username,
+      efs.fileSystemId
+    );
 
     // Deployment Controllers
     new Flagger(stack, {
@@ -364,40 +363,6 @@ export class CoreStack {
       prometheusReaderSecret: prometheusReaderSecret.metadata.name,
     });
 
-    // // Scaling
-    const autoScalerSA = new ServiceAccount({
-      name: `${stack}-cluster-autoscaler`,
-      oidcProvider: clusterOidcProvider,
-      cluster: this.cluster,
-      namespace: "kube-system",
-      inlinePolicies: [
-        { name: "autoscaler", policy: AutoScalerControllerPolicy },
-      ],
-    });
-    new k8s.helm.v3.Release(
-      "cluster-autoscaler",
-      {
-        chart: "cluster-autoscaler",
-        version: "9.21.0",
-        namespace: "kube-system",
-        values: {
-          rbac: { serviceAccount: { name: autoScalerSA.name, create: false } },
-          autoDiscovery: { clusterName },
-          awsRegion: region,
-          serviceMonitor: {
-            enabled: true,
-            selector: { release: "prometheus" },
-            namespace: "kube-system",
-          },
-          affinity: controllerAffinity,
-          tolerations: [coreControllerTaint],
-        },
-        repositoryOpts: {
-          repo: "https://kubernetes.github.io/autoscaler",
-        },
-      },
-      { provider, deleteBeforeReplace: true }
-    );
     new k8s.helm.v3.Release(
       "vertical-pod-autoscaler",
       {
@@ -446,19 +411,6 @@ export class CoreStack {
       { provider, deleteBeforeReplace: true }
     );
 
-    // Volumes
-    const efs = new EfsEksVolume(stack, {
-      vpc: this.vpc,
-      cluster,
-      clusterOidcProvider,
-      provider,
-      securityGroups: nodeSecurityGroupsIds.apply((nodeSecurityGroupsIds) => [
-        this.bastion.sg.id,
-        ...nodeSecurityGroupsIds,
-      ]),
-    });
-    this.efsFileSystemId = efs.fileSystemId;
-
     // Metrics & Observability
     new K8sObservability(stack, {
       provider,
@@ -502,5 +454,72 @@ export class CoreStack {
         protect: true,
       }
     );
+
+    new k8s.helm.v3.Release(
+      "cert-manager",
+      {
+        chart: "cert-manager",
+        version: "1.10.1",
+        values: {
+          affinity: controllerAffinity,
+          tolerations: [coreControllerTaint],
+          installCRDs: true,
+        },
+        cleanupOnFail: true,
+        repositoryOpts: {
+          repo: "https://charts.jetstack.io",
+        },
+      },
+      { provider, deleteBeforeReplace: true }
+    );
+    if (stack == "dev") {
+      new k8s.helm.v3.Release(
+        "actions-runner-controller",
+        {
+          chart: "actions-runner-controller",
+          version: "0.21.1",
+          values: {
+            authSecret: {
+              create: true,
+              github_token: config.requireSecret("githubToken"),
+            },
+          },
+          cleanupOnFail: true,
+          repositoryOpts: {
+            repo: "https://actions-runner-controller.github.io/actions-runner-controller",
+          },
+        },
+        { provider, deleteBeforeReplace: true }
+      );
+      const runnerDeployment = new RunnerDeployment("runner", {
+        metadata: {
+          name: "runner",
+          namespace: "automation",
+        },
+        spec: {
+          replicas: 1,
+          template: { spec: { repository: "1oakdigital/dating_site" } },
+        },
+      });
+      new HorizontalRunnerAutoscaler("runner-autoscaler", {
+        metadata: {
+          name: "runner",
+          namespace: "automation",
+        },
+        spec: {
+          // @ts-ignore
+          scaleTargetRef: { name: runnerDeployment.metadata.name },
+          scaleDownDelaySecondsAfterScaleOut: 500,
+          minReplicas: 1,
+          maxReplicas: 5,
+          metrics: [
+            {
+              type: "TotalNumberOfQueuedAndInProgressWorkflowRuns",
+              repositoryNames: ["1oakdigital/dating_site"],
+            },
+          ],
+        },
+      });
+    }
   }
 }

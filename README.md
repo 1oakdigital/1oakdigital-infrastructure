@@ -163,3 +163,13 @@ Updating kubeconfig file
 aws eks update-kubeconfig --region eu-west-2 --name dev #Update kubeconfig file
 kubectl get pods # Check running pods in cluster
 ```
+
+
+## CRDS
+crd2pulumi --nodejsPath ./crds/grafana/agent https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_grafanaagents.yaml --force
+crd2pulumi --nodejsPath ./crds/grafana/serviceMonitors https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.coreos.com_servicemonitors.yaml --force
+crd2pulumi --nodejsPath ./crds/grafana https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.coreos.com_servicemonitors.yaml --force^C
+crd2pulumi --nodejsPath ./crds/grafana/podLogs https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_podlogs.yaml --force
+crd2pulumi --nodejsPath ./crds/grafana/metricsInstance https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_metricsinstances.yaml --force
+crd2pulumi --nodejsPath ./crds/grafana/logsInstance https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_logsinstances.yaml --force
+crd2pulumi --nodejsPath ./crds/grafana/integrations https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_integrations.yaml --force

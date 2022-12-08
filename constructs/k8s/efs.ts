@@ -71,49 +71,5 @@ export class EfsEksVolume {
         repo: "https://kubernetes-sigs.github.io/aws-efs-csi-driver/",
       },
     });
-
-    new k8s.storage.v1.StorageClass(
-      `${stack}-website-sc`,
-      {
-        metadata: {
-          name: `${stack}-website-sc`,
-        },
-        mountOptions: ["tls"],
-        parameters: {
-          directoryPerms: "777",
-          fileSystemId: efs.id,
-          provisioningMode: "efs-ap",
-          gidRangeStart: "1",
-          gidRangeEnd: "2000",
-          basePath: "/dynamic_provisioning",
-        },
-        provisioner: "efs.csi.aws.com",
-        // reclaimPolicy: "Retain",
-        // volumeBindingMode: "Immediate"
-      },
-      { provider: props.cluster.provider }
-    );
-
-    new k8s.core.v1.PersistentVolume(
-      `${stack}-website-pv`,
-      {
-        metadata: {
-          name: `${stack}-website-pv`,
-          namespace: "websites",
-        },
-        spec: {
-          capacity: { storage: "5Gi" },
-          volumeMode: "Filesystem",
-          accessModes: ["ReadWriteMany"],
-          persistentVolumeReclaimPolicy: "Retain",
-          storageClassName: `${stack}-website-sc`,
-          csi: {
-            driver: "efs.csi.aws.com",
-            volumeHandle: efs.id,
-          },
-        },
-      },
-      { provider: props.cluster.provider }
-    );
   }
 }

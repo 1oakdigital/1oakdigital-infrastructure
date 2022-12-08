@@ -39,6 +39,8 @@ config:
     secure: v1:P15Saoo1xPkK1Oid:RU1z7z9kxJe7p4vJH1ElqDHJSpkD3A==
   1oakdigital-infrastructure:prometheus_user:
     secure: v1:LTmO2/ppq/LrMqRN:/NPoOTsXg1H4TsQvVpyrICtzMKmOyw==
+  1oakdigital-infrastructure:redis_password:
+    secure: v1:sNgr/orXWzfXePEm:R55rsCPvzwQVgmE7xsYwsnmJ1F8oS6C9OezHzrjLVYw=
   aws:region: eu-west-2
   cloudflare:apiToken:
     secure: v1:RXpPttnkc6v2xy8s:11IdS1xRX0q5raAcSCRPLrkurEJF0z0CtP5dxO4PFD79+oliF+nPMbEkr5pcdpB3UYFyYDR/JSo=

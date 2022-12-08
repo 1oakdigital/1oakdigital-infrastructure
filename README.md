@@ -86,7 +86,10 @@ crd2pulumi --nodejs https://raw.githubusercontent.com/fluxcd/flagger/main/artifa
 - [Vertical Pod autoscaller](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler#example-vpa-configuration)
 
 
+
 # AWS & Kubernetes resources
+
+![Diagram](infrastructure.png)
 
 - [Virtual private cloud (VPC)](https://docs.aws.amazon.com/vpc/latest/userguide/configure-your-vpc.html)
   - [Nat Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html)
@@ -109,7 +112,7 @@ crd2pulumi --nodejs https://raw.githubusercontent.com/fluxcd/flagger/main/artifa
       - [External-DNS](https://github.com/kubernetes-sigs/external-dns)
         - [Chart](https://artifacthub.io/packages/helm/external-dns/external-dns)
     - Monitoring & Scaling
-      - [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)
+      - [Karpenter](https://karpenter.sh/v0.19.3/)
       - [Kube State Metrics](https://github.com/kubernetes/kube-state-metrics)
       - [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/)
       - [Keda](https://keda.sh/)

@@ -69,11 +69,11 @@ export class EksCluster {
       encryptionConfigKeyArn: clusterKey.arn,
       instanceRoles: [nodeRole],
       roleMappings: [
-        // {
-        //   groups: ["system:masters"],
-        //   roleArn: "arn:aws:iam::707053725174:role/dev-cluster-admin-role",
-        //   username: "arn:aws:iam::707053725174:role/dev-cluster-admin-role",
-        // },
+        {
+          groups: ["system:masters"],
+          roleArn: "arn:aws:iam::707053725174:role/dev-cluster-admin-role",
+          username: "arn:aws:iam::707053725174:role/dev-cluster-admin-role",
+        },
         {
           groups: ["system:masters", "system:nodes"],
           roleArn: karpenterNodeRole.arn,
@@ -115,21 +115,30 @@ export class EksCluster {
         cluster: this.cluster,
         nodeGroupName: `${stack}-base-node-group`,
         nodeRoleArn: nodeRole.arn,
-        instanceTypes: ["t3a.medium", "t3.medium", "t3.small", "t3.large"],
+        instanceTypes: [
+          "t3.small",
+          "t3a.small",
+          "t3.micro",
+          "t3a.micro",
+          "t3a.medium",
+          "t3.medium",
+          "t3.large",
+        ],
+        capacityType: "SPOT",
         subnetIds: props.vpc.privateSubnetIds,
         labels: controllerLabels,
         taints: [karpenterTaintEks],
         tags: controllerLabels,
         scalingConfig: {
-          maxSize: 1,
-          minSize: 1,
-          desiredSize: 1,
+          maxSize: 4,
+          minSize: 2,
+          desiredSize: 2,
         },
       },
       this.cluster
     );
     const karpenterSa = new ServiceAccount({
-      name: "karpenter-prod-sa",
+      name: `karpenter-${stack}-sa`,
       namespace: "default",
       oidcProvider: this.clusterOidcProvider,
       cluster: this.cluster,
@@ -148,7 +157,7 @@ export class EksCluster {
         role: karpenterNodeRole.name,
       }
     );
-    new k8s.helm.v3.Release(
+    const karpenter = new k8s.helm.v3.Release(
       "karpenter",
       {
         chart: "karpenter",
@@ -166,8 +175,9 @@ export class EksCluster {
           },
           serviceAccount: {
             create: true,
-            // name: karpenterSa.name,
-            "eks.amazonaws.com/role-arn": karpenterSa.roleArn,
+            annotations: {
+              "eks.amazonaws.com/role-arn": karpenterSa.roleArn,
+            },
           },
         },
         cleanupOnFail: true,
@@ -178,133 +188,149 @@ export class EksCluster {
       { provider: this.cluster.provider, deleteBeforeReplace: true }
     );
 
-    new AWSNodeTemplate("karpenter-node-template", {
-      metadata: {
-        name: "default",
-      },
-      spec: {
-        blockDeviceMappings: [
-          {
-            deviceName: "/dev/xvda",
-            ebs: {
-              volumeSize: "60Gi",
-              volumeType: "gp3",
-              iops: 3000,
-              encrypted: true,
-              // kmsKeyID:
-              //   "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab",
-              deleteOnTermination: true,
-              throughput: 125,
+    new AWSNodeTemplate(
+      "karpenter-node-template",
+      {
+        metadata: {
+          name: "default",
+        },
+        spec: {
+          blockDeviceMappings: [
+            {
+              deviceName: "/dev/xvda",
+              ebs: {
+                volumeSize: "60Gi",
+                volumeType: "gp3",
+                iops: 3000,
+                encrypted: true,
+                // kmsKeyID:
+                //   "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+                deleteOnTermination: true,
+                throughput: 125,
+              },
             },
+          ],
+          subnetSelector: {
+            // "alpha.eksctl.io/cluster-name": clusterName,
+            // @ts-ignore
+            Name: `${stack}-vpc-private*`,
           },
-        ],
-        subnetSelector: {
-          // "alpha.eksctl.io/cluster-name": clusterName,
-          // @ts-ignore
-          Name: "prod-vpc-private*",
-        },
-        securityGroupSelector: {
-          "aws-ids": this.cluster.nodeSecurityGroup.id,
+          securityGroupSelector: {
+            "aws-ids": this.cluster.nodeSecurityGroup.id,
+          },
         },
       },
-    });
+      { dependsOn: [karpenter] }
+    );
     const websiteLabels = { "compute-type": "spot", type: "website" };
     const workerLabels = { "compute-type": "spot", type: "worker" };
-    new Provisioner(`karpenter-provisioner-website`, {
-      metadata: {
-        name: "website",
-      },
-      spec: {
-        requirements: [
-          {
-            key: "karpenter.sh/capacity-type",
-            operator: "In",
-            values: ["spot", "on-demand"],
-          },
-          {
-            key: "karpenter.k8s.aws/instance-size",
-            operator: "In",
-            values: ["large", "xlarge", "2xlarge", "3xlarge", "4xlarge"],
-          },
-        ],
-        limits: {
-          resources: {
-            cpu: 100,
-            memory: "100Gi",
-          },
+    new Provisioner(
+      `karpenter-provisioner-website`,
+      {
+        metadata: {
+          name: "website",
         },
+        spec: {
+          requirements: [
+            {
+              key: "karpenter.sh/capacity-type",
+              operator: "In",
+              values: ["spot", "on-demand"],
+            },
+            {
+              key: "karpenter.k8s.aws/instance-size",
+              operator: "In",
+              values: ["large", "xlarge", "2xlarge", "3xlarge", "4xlarge"],
+            },
+          ],
+          limits: {
+            resources: {
+              cpu: 100,
+              memory: "100Gi",
+            },
+          },
 
-        taints: [websiteTaint],
-        labels: websiteLabels,
-        ttlSecondsAfterEmpty: 30,
-        ttlSecondsUntilExpired: 2592000,
-        providerRef: {
-          name: "default",
-        },
-      },
-    });
-    new Provisioner(`karpenter-provisioner-worker`, {
-      metadata: {
-        name: "worker",
-      },
-      spec: {
-        requirements: [
-          {
-            key: "karpenter.sh/capacity-type",
-            operator: "In",
-            values: ["spot"],
-          },
-          {
-            key: "karpenter.k8s.aws/instance-size",
-            operator: "In",
-            values: ["large", "xlarge", "2xlarge", "3xlarge", "4xlarge"],
-          },
-        ],
-        limits: {
-          resources: {
-            cpu: 100,
-            memory: "100Gi",
+          taints: [websiteTaint],
+          labels: websiteLabels,
+          ttlSecondsAfterEmpty: 30,
+          ttlSecondsUntilExpired: 2592000,
+          providerRef: {
+            name: "default",
           },
         },
-        taints: [workerTaint],
-        labels: workerLabels,
-        ttlSecondsAfterEmpty: 30,
-        ttlSecondsUntilExpired: 2592000,
-        providerRef: {
-          name: "default",
+      },
+      { dependsOn: [karpenter] }
+    );
+    new Provisioner(
+      `karpenter-provisioner-worker`,
+      {
+        metadata: {
+          name: "worker",
+        },
+        spec: {
+          requirements: [
+            {
+              key: "karpenter.sh/capacity-type",
+              operator: "In",
+              values: ["spot"],
+            },
+            {
+              key: "karpenter.k8s.aws/instance-size",
+              operator: "In",
+              values: ["large", "xlarge", "2xlarge", "3xlarge", "4xlarge"],
+            },
+          ],
+          limits: {
+            resources: {
+              cpu: 100,
+              memory: "100Gi",
+            },
+          },
+          taints: [workerTaint],
+          labels: workerLabels,
+          ttlSecondsAfterEmpty: 30,
+          ttlSecondsUntilExpired: 2592000,
+          providerRef: {
+            name: "default",
+          },
         },
       },
-    });
-    new Provisioner(`karpenter-provisioner-controller`, {
-      metadata: {
-        name: "controller",
-      },
-      spec: {
-        requirements: [
-          {
-            key: "karpenter.sh/capacity-type",
-            operator: "In",
-            values: ["spot", "on-demand"],
+      { dependsOn: [karpenter] }
+    );
+    new Provisioner(
+      `karpenter-provisioner-controller`,
+      {
+        metadata: {
+          name: "controller",
+        },
+        spec: {
+          requirements: [
+            {
+              key: "karpenter.sh/capacity-type",
+              operator: "In",
+              values: ["spot", "on-demand"],
+            },
+            {
+              key: "karpenter.k8s.aws/instance-size",
+              operator: "NotIn",
+              values: ["nano", "micro", "small", "medium"],
+            },
+          ],
+          limits: {
+            resources: {
+              cpu: 100,
+              memory: "500Gi",
+            },
           },
-          {
-            key: "karpenter.k8s.aws/instance-size",
-            operator: "NotIn",
-            values: ["nano", "micro", "small", "medium"],
-          },
-        ],
-        limits: {
-          resources: {
-            cpu: 100,
-            memory: "500Gi",
+          labels: controllerLabels,
+          ttlSecondsAfterEmpty: 30,
+          ttlSecondsUntilExpired: 2592000,
+          providerRef: {
+            name: "default",
           },
         },
-        labels: controllerLabels,
-        ttlSecondsAfterEmpty: 30,
-        ttlSecondsUntilExpired: 2592000,
-        providerRef: {
-          name: "default",
-        },
       },
-    });
+      { dependsOn: [karpenter] }
+    );
   }
 }

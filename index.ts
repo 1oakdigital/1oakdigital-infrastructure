@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { CoreStack } from "./stack";
+import { CoreStack, BaseStack } from "./stack";
 
 const stack = pulumi.getStack();
 export const region = aws.config.requireRegion();
@@ -36,17 +36,8 @@ if (stack == "dev") {
     websitesDbMinCapacity: 0.5,
   });
 } else if (stack == "base") {
-  stackResources = new CoreStack(stack, {
-    cidrBlock: "10.0.0.0/16",
-    sshKeyName: stack,
-    subdomain: "v2",
-    databasePerSite: true,
-    nginxMinReplicas: 2,
-    nginxMaxReplicas: 3,
-    redisNodeType: "cache.t4g.medium",
-    websitesDbMaxCapacity: 1,
-    websitesDbMinCapacity: 0.5,
-  });
+  // @ts-ignore
+  stackResources = new BaseStack(stack);
 }
 export const vpc = {
   id: stackResources.vpc.vpcId,

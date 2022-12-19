@@ -55,17 +55,6 @@ pulumi stack init <stack> --secrets-provider="awskms://alias/pulumi?region=us-ea
 ```
 
 
-### [CRD2Pulumi](https://github.com/pulumi/crd2pulumi)
-Installation
-```bash
-brew install pulumi/tap/crd2pulumi
-````
-Usage
-```bash
-crd2pulumi --nodejs local.yaml # loading local file
-crd2pulumi --nodejs https://raw.githubusercontent.com/fluxcd/flagger/main/artifacts/flagger/crd.yaml # Loading CRDs from github
-```
-
 ## Layout
 - index.ts - Main Pulumi file which deploys imported code
 - stacks/ - Folder containing stack classes
@@ -169,10 +158,13 @@ kubectl get pods # Check running pods in cluster
 
 
 ## CRDS
-crd2pulumi --nodejsPath ./crds/grafana/agent https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_grafanaagents.yaml --force
-crd2pulumi --nodejsPath ./crds/grafana/serviceMonitors https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.coreos.com_servicemonitors.yaml --force
-crd2pulumi --nodejsPath ./crds/grafana https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.coreos.com_servicemonitors.yaml --force^C
-crd2pulumi --nodejsPath ./crds/grafana/podLogs https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_podlogs.yaml --force
-crd2pulumi --nodejsPath ./crds/grafana/metricsInstance https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_metricsinstances.yaml --force
-crd2pulumi --nodejsPath ./crds/grafana/logsInstance https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_logsinstances.yaml --force
-crd2pulumi --nodejsPath ./crds/grafana/integrations https://raw.githubusercontent.com/grafana/agent/main/production/operator/crds/monitoring.grafana.com_integrations.yaml --force
+To generate CRDS **[crd2pulumi](https://github.com/pulumi/crd2pulumi])** is used
+
+```bash
+brew install pulumi/tap/crd2pulumi
+crd2pulumi help
+```
+Updating existing CRDS
+```bash
+./bin/update-crds.sh 
+```

@@ -55,7 +55,7 @@ export class EfsEksVolume {
       chart: "aws-efs-csi-driver",
       version: "2.3.2",
       namespace: "kube-system",
-      name: "aws-efs-csi-driver-08d85bf2",
+      name: "aws-efs-csi-driver",
       values: {
         fileSystemId: efs.id,
         directoryPerms: 777,

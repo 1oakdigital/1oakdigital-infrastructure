@@ -5,24 +5,20 @@ import { splitIntoChunk } from "./helpers";
 import { allDomains, CloudflareDomain } from "../configs/domains";
 import { CloudflareAcmCertificateV2 } from "./cloudfareCertificate";
 import * as pulumi from "@pulumi/pulumi";
-import {controllerAffinity, coreControllerTaint} from "../configs/consts";
-import {Output} from "@pulumi/pulumi/output";
+import { controllerAffinity, coreControllerTaint } from "../configs/consts";
+import { Output } from "@pulumi/pulumi/output";
 
 export interface DnsConfigurationProps {
-  subdomain?: string
-  namespace: string
+  subdomain?: string;
+  namespace: string;
 }
 
 export class DnsConfiguration {
-    certificates: Output<string>[]
-    domains: string[]
+  certificates: Output<string>[];
+  domains: string[];
 
-  constructor(
-    stack: string,
-    props: DnsConfigurationProps,
-  ) {
+  constructor(stack: string, props: DnsConfigurationProps) {
     const { subdomain, namespace } = props;
-
 
     this.certificates = [];
     this.domains = [];
@@ -51,6 +47,7 @@ export class DnsConfiguration {
             subjectAlternativeNames,
           }
         );
+
         this.certificates.push(certificate.arn);
       }
     );
@@ -61,7 +58,7 @@ export class DnsConfiguration {
     new k8s.core.v1.Secret("cloudflare-credentials", {
       metadata: {
         name: "cloudflare-credentials",
-        namespace
+        namespace,
       },
       stringData: {
         CF_API_TOKEN: cloudflareConfig.requireSecret("apiToken"),

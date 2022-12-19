@@ -10,7 +10,6 @@ import {
 } from "./constructs/database";
 import * as eks from "@pulumi/eks";
 import { REDIS_PORT, RedisCluster } from "./constructs/redis";
-import { EfsEksVolume } from "./constructs/k8s/efs";
 import { GrafanaK8s } from "./constructs/grafana";
 import { EksCluster } from "./constructs/eks";
 import { Vpc } from "./constructs/vpc";
@@ -26,12 +25,9 @@ import { websitesDbMap } from "./configs/siteMap";
 import { DnsConfiguration } from "./constructs/dns";
 import { Output } from "@pulumi/pulumi/output";
 import { DmsReplication } from "./constructs/replication";
-import { HorizontalRunnerAutoscaler } from "./crds/github/horizontalrunnerautoscalers/actions/v1alpha1/horizontalRunnerAutoscaler";
-import { RunnerDeployment } from "./crds/github/deployment/actions/v1alpha1/runnerDeployment";
-import { accountId, region } from "./index";
+import { region } from "./index";
 import { SecurityHub } from "./constructs/securityHub";
 import { AwsConfig } from "./constructs/config";
-import { BucketVersioningV2 } from "@pulumi/aws/s3";
 import { GithubRunner } from "./constructs/githubRunner";
 
 export interface websitesSecretsOutput {
@@ -47,7 +43,6 @@ export class CoreStack {
   readonly cacheCluster: RedisCluster;
   readonly bastion: BastionHost;
   readonly bucket: aws.s3.Bucket;
-  readonly efsFileSystemId: Output<string>;
   readonly websiteSecrets: { [name: string]: websitesSecretsOutput };
 
   constructor(stack: string, props: CoreStackProps) {
@@ -163,6 +158,7 @@ export class CoreStack {
           },
           externalSecretName: "db-secret",
           externalSecretSpec: {
+            refreshInterval: "1m",
             secretStoreRef: {
               name: "secretstore-aws",
               kind: "ClusterSecretStore",
@@ -309,16 +305,6 @@ export class CoreStack {
       maxReplicas: props.nginxMaxReplicas,
     });
 
-    // Volumes
-    const efs = new EfsEksVolume(stack, {
-      vpc: this.vpc,
-      cluster,
-      clusterOidcProvider,
-      provider,
-      securityGroups: [this.bastion.sg.id, this.cluster.nodeSecurityGroup.id],
-    });
-    this.efsFileSystemId = efs.fileSystemId;
-
     // Grafana & Prometheus
 
     const prometheusUrl =
@@ -349,14 +335,7 @@ export class CoreStack {
       },
     });
 
-    new GrafanaK8s(
-      stack,
-      clusterName,
-      prometheusUrl,
-      lokiUrl,
-      username,
-      efs.fileSystemId
-    );
+    new GrafanaK8s(stack, clusterName, prometheusUrl, lokiUrl, username);
 
     // Deployment Controllers
     new Flagger(stack, {
@@ -372,7 +351,7 @@ export class CoreStack {
       "vertical-pod-autoscaler",
       {
         chart: "vertical-pod-autoscaler",
-        version: "6.0.0",
+        version: "6.0.2",
         values: {
           admissionController: {
             affinity: controllerAffinity,
@@ -472,6 +451,83 @@ export class CoreStack {
         protect: true,
       }
     );
+
+    const cdn = new aws.cloudfront.Distribution(`${stack}-s3-cdn`, {
+      enabled: true,
+      retainOnDelete: false,
+      priceClass: "PriceClass_100",
+      defaultCacheBehavior: {
+        defaultTtl: 0, // by default, don't cache anything without a Cache-Control header.
+        minTtl: 0,
+        maxTtl: 365 * 24 * 60 * 60, // allow cache ttls up to 1 year
+        allowedMethods: ["GET", "HEAD", "OPTIONS"],
+        cachedMethods: ["GET", "HEAD", "OPTIONS"],
+        compress: true,
+        forwardedValues: {
+          cookies: { forward: "all" },
+          queryString: true,
+        },
+        targetOriginId: this.bucket.arn,
+        viewerProtocolPolicy: "redirect-to-https",
+      },
+      orderedCacheBehaviors: [
+        // This defines the cache rules *specifically* for assets in /static/, with
+        // a few key differences:
+        //  - cookies are not forwarded, and hence not used as part of the cache key
+        //  - query strings are not forwarded
+        //  - a default ttl is set, in case the origin forgets to configure caching
+        //  - mutative methods (POST, PUT, etc) are not allowed
+        {
+          pathPattern: "/*",
+          defaultTtl: 60,
+          minTtl: 60,
+          maxTtl: 120,
+          compress: true,
+          allowedMethods: ["HEAD", "GET", "OPTIONS"],
+          cachedMethods: ["GET", "HEAD", "OPTIONS"],
+          targetOriginId: this.bucket.arn,
+          forwardedValues: {
+            cookies: { forward: "none" },
+            queryString: true,
+            headers: [],
+          },
+          viewerProtocolPolicy: "redirect-to-https",
+        },
+      ],
+      origins: [
+        {
+          domainName: this.bucket.bucketRegionalDomainName,
+          originId: this.bucket.arn,
+          // s3OriginConfig: {
+          //   originAccessIdentity: originAccessIdentity.cloudfrontAccessIdentityPath,
+          // },
+        },
+      ],
+      restrictions: {
+        geoRestriction: {
+          restrictionType: "none",
+        },
+      },
+      viewerCertificate: {
+        // ...certs,
+        cloudfrontDefaultCertificate: true,
+        // minimumProtocolVersion: "TLSv1.2_2021",
+        // sslSupportMethod: "sni-only",
+      },
+      // aliases: landingDomains,
+      tags,
+    });
+
+    new k8s.core.v1.ConfigMap(`${stack}-shared-env`, {
+      metadata: {
+        name: "shared",
+        namespace: websitesNamespace,
+      },
+      data: {
+        CDN_URL: pulumi.interpolate`https://${cdn.domainName}/`,
+        AWS_BUCKET: this.bucket.bucket,
+      },
+    });
 
     if (stack == "dev") {
       new GithubRunner(clusterOidcProvider);

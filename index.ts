@@ -73,4 +73,3 @@ export const bucket = {
   name: stackResources.bucket.bucket,
 };
 export const websiteNameSpace = "websites";
-export const efsFileSystemId = stackResources.efsFileSystemId;

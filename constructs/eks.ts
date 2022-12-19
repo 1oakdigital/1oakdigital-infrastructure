@@ -282,14 +282,15 @@ export class EksCluster {
           ],
           limits: {
             resources: {
-              cpu: 100,
-              memory: "100Gi",
+              cpu: 1000,
+              memory: "500Gi",
             },
           },
           taints: [workerTaint],
           labels: workerLabels,
           ttlSecondsAfterEmpty: 30,
           ttlSecondsUntilExpired: 2592000,
+
           providerRef: {
             name: "default",
           },
@@ -313,12 +314,12 @@ export class EksCluster {
             {
               key: "karpenter.k8s.aws/instance-size",
               operator: "NotIn",
-              values: ["nano", "micro", "small", "medium"],
+              values: ["nano", "micro", "small"],
             },
           ],
           limits: {
             resources: {
-              cpu: 100,
+              cpu: 1000,
               memory: "500Gi",
             },
           },

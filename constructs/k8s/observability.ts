@@ -119,7 +119,7 @@ export class K8sObservability {
     //  Keda
     const keda = new k8s.helm.v3.Release("keda", {
       chart: "keda",
-      version: "2.8.2",
+      version: "2.9.0",
       name: "keda",
       namespace,
       values: {

@@ -14,8 +14,7 @@ export class GrafanaK8s {
     clusterName: OutputInstance<string> | string,
     prometheusUrl: string,
     lokiUrl: string,
-    username: OutputInstance<string> | string,
-    fileSystemId: OutputInstance<string> | string
+    username: OutputInstance<string> | string
   ) {
     const name = "grafana-agent";
     const namespace = "automation";
@@ -121,31 +120,6 @@ export class GrafanaK8s {
       ],
     });
 
-    // new k8s.storage.v1.StorageClass(`grafana-integration-sc`, {
-    //   metadata: {
-    //     name: `grafana-integration-sc`,
-    //   },
-    //   mountOptions: ["tls"],
-    //   parameters: {
-    //     fileSystemId,
-    //     provisioningMode: "efs-ap",
-    //     basePath: `/grafana-integration`,
-    //   },
-    //   provisioner: "efs.csi.aws.com",
-    //   reclaimPolicy: "Retain",
-    // });
-    //
-    // const pvc = new PersistentVolumeClaim(`${name}-integration-pvc`, {
-    //   metadata: {
-    //     name: "agent-eventhandler-pvc",
-    //     namespace,
-    //   },
-    //   spec: {
-    //     storageClassName: "grafana-integration-sc",
-    //     accessModes: ["ReadWriteOnce"],
-    //     resources: { requests: { storage: "1Gi" } },
-    //   },
-    // });
     new Integration(`${name}-integration`, {
       metadata: {
         name: "agent-eventhandler",
@@ -159,15 +133,6 @@ export class GrafanaK8s {
           logs_instance: "automation/grafana-agent-logs",
         },
         type: { unique: true },
-        // volumes: [
-        //   {
-        //     name: "agent-eventhandler",
-        //     persistentVolumeClaim: { claimName: pvc.metadata.name },
-        //   },
-        // ],
-        // volumeMounts: [
-        //   { mountPath: "/etc/eventhandler", name: "agent-eventhandler" },
-        // ],
       },
     });
 

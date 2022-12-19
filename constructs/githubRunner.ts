@@ -2,7 +2,11 @@ import * as eks from "@pulumi/eks";
 import * as aws from "@pulumi/aws";
 import { EksClusterProps } from "./eks";
 import * as k8s from "@pulumi/kubernetes";
-import { controllerAffinity, coreControllerTaint } from "../configs/consts";
+import {
+  controllerAffinity,
+  coreControllerTaint,
+  workerTaint,
+} from "../configs/consts";
 import { RunnerDeployment } from "../crds/github/deployment/actions/v1alpha1/runnerDeployment";
 import { HorizontalRunnerAutoscaler } from "../crds/github/horizontalrunnerautoscalers/actions/v1alpha1/horizontalRunnerAutoscaler";
 import { config } from "../index";
@@ -53,7 +57,39 @@ export class GithubRunner {
         },
         spec: {
           replicas: 1,
-          template: { spec: { repository: "1oakdigital/dating_site" } },
+          template: {
+            spec: {
+              repository: "1oakdigital/dating_site",
+              tolerations: [workerTaint],
+              resources: {
+                requests: {
+                  cpu: "256m",
+                  memory: "512Mi",
+                },
+                limits: {
+                  cpu: "1",
+                  memory: "2048Mi",
+                },
+              },
+              affinity: {
+                nodeAffinity: {
+                  requiredDuringSchedulingIgnoredDuringExecution: {
+                    nodeSelectorTerms: [
+                      {
+                        matchExpressions: [
+                          {
+                            key: "type",
+                            operator: "In",
+                            values: ["worker"],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
         },
       },
       { dependsOn: [runnerController] }

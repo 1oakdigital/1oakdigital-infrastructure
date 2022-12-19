@@ -134,15 +134,15 @@ export class ExternalSecrets {
                   type: "ConfigMap",
                   name: "kube-root-ca.crt",
                   key: "ca.crt",
-                  namespace
+                  namespace,
                 },
               },
               auth: {
                 serviceAccount: {
                   name: externalSecretsServiceAccount.name,
-                  namespace
-                }
-              }
+                  namespace,
+                },
+              },
             },
           },
         },
@@ -177,6 +177,7 @@ export class DatabaseExternalSecret {
           },
           externalSecretName: name,
           externalSecretSpec: {
+            refreshInterval: "1h",
             secretStoreRef: {
               name: "secretstore-aws",
               kind: "ClusterSecretStore",

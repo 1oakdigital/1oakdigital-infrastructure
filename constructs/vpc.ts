@@ -8,7 +8,7 @@ export interface VpcProps {
   numberOfAvailabilityZones?: number;
 }
 export class Vpc {
-  readonly vpc: awsx.ec2.Vpc
+  readonly vpc: awsx.ec2.Vpc;
 
   constructor(
     stack: string,
@@ -21,6 +21,21 @@ export class Vpc {
       natGateways: { strategy: NatGatewayStrategy.Single },
       tags: { name: `${stack}-vpc`, ...tags },
       enableDnsHostnames: true,
+    });
+
+    // new aws.ec2.VpcEndpoint("vpc-endpoint-ec2", {
+    //   vpcId: this.vpc.vpcId,
+    //   serviceName: "com.amazonaws.eu-west-2.ec2",
+    //   vpcEndpointType: "Interface",
+    //   privateDnsEnabled: true,
+    //   subnetIds: this.vpc.privateSubnetIds,
+    // });
+    new aws.ec2.VpcEndpoint("vpc-endpoint-securityhub", {
+      vpcId: this.vpc.vpcId,
+      serviceName: "com.amazonaws.eu-west-2.securityhub",
+      vpcEndpointType: "Interface",
+      privateDnsEnabled: true,
+      subnetIds: this.vpc.privateSubnetIds,
     });
 
     this.vpc.privateSubnetIds.apply((subnets) =>

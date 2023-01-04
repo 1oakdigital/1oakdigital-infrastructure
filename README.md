@@ -57,16 +57,20 @@ pulumi stack init <stack> --secrets-provider="awskms://alias/pulumi?region=us-ea
 
 ## Layout
 - index.ts - Main Pulumi file which deploys imported code
-- stacks/ - Folder containing stack classes
+- environmentStack/ - environment stack containing all environment specific resources (EKS cluster, RDS, Redis, S3, VPC)
+- accountStack/ - Account stack containing not env replicated resources (Security Configurations, BigQuery settings)
 - stacks/constructs/ - Reusable resource constructs which are used in stacks
-- stacks/constructs/k8s - construct deployed inside Kubernetes cluster
+- stacks/constructs/k8s - constructs deployed or used in Kubernetes cluster
+- configs/ - Domain and Site mappings, consts
 - crd - Custom CRDS loaded with crd2pulumi tool
 
 
 ## Packages used
 - [AWS Classic](https://www.pulumi.com/registry/packages/aws/)
 - [AWSX](https://www.pulumi.com/registry/packages/awsx/)
+- [AWS Native](https://www.pulumi.com/registry/packages/aws-native/)
 - [Kubernetes](https://www.pulumi.com/registry/packages/kubernetes/)
+- [GCP](https://www.pulumi.com/registry/packages/gcp/)
 
 ## Custom resources Used
 - [Keda Scaled Object](https://docs.flagger.app/tutorials/keda-scaledobject)

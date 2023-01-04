@@ -1,18 +1,15 @@
-import * as eks from "@pulumi/eks";
-import * as aws from "@pulumi/aws";
-import { EksClusterProps } from "./eks";
 import * as k8s from "@pulumi/kubernetes";
 import {
   controllerAffinity,
   coreControllerTaint,
   workerTaint,
-} from "../configs/consts";
-import { RunnerDeployment } from "../crds/github/deployment/actions/v1alpha1/runnerDeployment";
-import { HorizontalRunnerAutoscaler } from "../crds/github/horizontalrunnerautoscalers/actions/v1alpha1/horizontalRunnerAutoscaler";
-import { config } from "../index";
+} from "../../configs/consts";
+import { RunnerDeployment } from "../../crds/github/deployment/actions/v1alpha1/runnerDeployment";
+import { HorizontalRunnerAutoscaler } from "../../crds/github/horizontalrunnerautoscalers/actions/v1alpha1/horizontalRunnerAutoscaler";
+import { config } from "../../index";
 
 export class GithubRunner {
-  constructor(provider: aws.iam.OpenIdConnectProvider) {
+  constructor() {
     const certManager = new k8s.helm.v3.Release(
       "cert-manager",
       {

@@ -11,7 +11,6 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   PULUMI_BUCKET: s3://1oakdigital-pulumi
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PULUMI_VERSION: 3.46.1
 jobs:
   set-env:
     name: Install Env Vars based on branch
@@ -25,11 +24,9 @@ jobs:
         run: |
           if [[ "${{github.base_ref}}" == "main" || "${{github.ref}}" == "refs/heads/main" ]]; then
             echo "environment=production" >> $GITHUB_OUTPUT
-            echo "wait_for_canary=true" >> $GITHUB_OUTPUT
           fi
           if [[ "${{github.base_ref}}" == "feature/k8s" || "${{github.ref}}" == "refs/heads/feature/k8s" ]]; then
             echo "environment=dev" >> $GITHUB_OUTPUT
-            echo "wait_for_canary=false" >> $GITHUB_OUTPUT
           fi
           echo "release=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
   deploy-pulumi:
@@ -61,7 +58,7 @@ jobs:
           stack-name: ${{needs.set-env.outputs.environment}}
           cloud-url: ${{ env.PULUMI_BUCKET }}
           diff: true
-          pulumi-version: 3.46.1
+          pulumi-version: 3.50.2
         env:
           RELEASE: ${{needs.set-env.outputs.release}}
 

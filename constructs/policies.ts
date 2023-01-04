@@ -213,44 +213,6 @@ export const AlbControllerPolicy = JSON.stringify({
     },
   ],
 });
-export const ExternalDnsControllerPolicy = JSON.stringify({
-  Version: "2012-10-17",
-  Statement: [
-    {
-      Effect: "Allow",
-      Action: ["route53:*"],
-      Resource: "*",
-    },
-  ],
-});
-export const AutoScalerControllerPolicy = JSON.stringify({
-  Version: "2012-10-17",
-  Statement: [
-    {
-      Effect: "Allow",
-      Action: [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances",
-        "autoscaling:DescribeLaunchConfigurations",
-        "autoscaling:DescribeTags",
-        "ec2:DescribeInstanceTypes",
-        "ec2:DescribeLaunchTemplateVersions",
-      ],
-      Resource: ["*"],
-    },
-    {
-      Effect: "Allow",
-      Action: [
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup",
-        "ec2:DescribeImages",
-        "ec2:GetInstanceTypesFromInstanceRequirements",
-        "eks:DescribeNodegroup",
-      ],
-      Resource: ["*"],
-    },
-  ],
-});
 export const ExternalSecretsControllerPolicy = JSON.stringify({
   Version: "2012-10-17",
   Statement: [
@@ -316,6 +278,9 @@ export const KarpenterPolicy = JSON.stringify({
         "ec2:DescribeInstanceTypes",
         "ec2:DescribeInstanceTypeOfferings",
         "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeSpotPriceHistory",
+        "ec2:RequestSpotInstances",
+        "ec2:*VpcEndpoint*",
         "ssm:GetParameter",
         "pricing:GetProducts",
       ],

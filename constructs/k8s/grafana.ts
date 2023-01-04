@@ -1,12 +1,12 @@
 import * as k8s from "@pulumi/kubernetes";
 import { OutputInstance, Config } from "@pulumi/pulumi";
-import { GrafanaAgent } from "../crds/grafana/agent/monitoring/v1alpha1/grafanaAgent";
-import { MetricsInstance } from "../crds/grafana/metricsInstance/monitoring/v1alpha1/metricsInstance";
-import { ServiceMonitor } from "../crds/grafana/serviceMonitors/monitoring/v1/serviceMonitor";
-import { LogsInstance } from "../crds/grafana/logsInstance/monitoring/v1alpha1/logsInstance";
-import { Integration } from "../crds/grafana/integrations/monitoring/v1alpha1/integration";
+import { GrafanaAgent } from "../../crds/grafana/agent/monitoring/v1alpha1/grafanaAgent";
+import { MetricsInstance } from "../../crds/grafana/metricsInstance/monitoring/v1alpha1/metricsInstance";
+import { ServiceMonitor } from "../../crds/grafana/serviceMonitors/monitoring/v1/serviceMonitor";
+import { LogsInstance } from "../../crds/grafana/logsInstance/monitoring/v1alpha1/logsInstance";
+import { Integration } from "../../crds/grafana/integrations/monitoring/v1alpha1/integration";
 import { PersistentVolumeClaim } from "@pulumi/kubernetes/core/v1";
-import { PodLogs } from "../crds/grafana/podLogs/monitoring/v1alpha1/podLogs";
+import { PodLogs } from "../../crds/grafana/podLogs/monitoring/v1alpha1/podLogs";
 
 export class GrafanaK8s {
   constructor(

@@ -10,7 +10,7 @@ import {
 } from "./constructs/database";
 import * as eks from "@pulumi/eks";
 import { REDIS_PORT, RedisCluster } from "./constructs/redis";
-import { GrafanaK8s } from "./constructs/grafana";
+import { GrafanaK8s } from "./constructs/k8s/grafana";
 import { EksCluster } from "./constructs/eks";
 import { Vpc } from "./constructs/vpc";
 import {
@@ -25,17 +25,16 @@ import { websitesDbMap } from "./configs/siteMap";
 import { DnsConfiguration } from "./constructs/dns";
 import { Output } from "@pulumi/pulumi/output";
 import { DmsReplication } from "./constructs/replication";
-import { region } from "./index";
-import { SecurityHub } from "./constructs/securityHub";
-import { AwsConfig } from "./constructs/config";
-import { GithubRunner } from "./constructs/githubRunner";
+import { GithubRunner } from "./constructs/k8s/githubRunner";
+import * as cloudflare from "@pulumi/cloudflare";
+import { domainZoneMap } from "./configs/domains";
 
 export interface websitesSecretsOutput {
   name: string;
   securityGroupId: Output<string>;
 }
 
-export class CoreStack {
+export class EnvironmentStack {
   readonly vpc: awsx.ec2.Vpc;
   readonly cluster: eks.Cluster;
   readonly clusterOidcProvider: aws.iam.OpenIdConnectProvider;
@@ -59,6 +58,13 @@ export class CoreStack {
       },
       tags
     ).vpc;
+
+    new aws.ec2.FlowLog(`${stack}-vpc-flow-log`, {
+      logDestination: "arn:aws:s3:::base-vpc-flow-log-bucket-fb17e20",
+      logDestinationType: "s3",
+      trafficType: "ALL",
+      vpcId: this.vpc.vpcId,
+    });
 
     // EKS cluster configuration
 
@@ -143,6 +149,14 @@ export class CoreStack {
       },
       tags
     );
+    new aws.ec2.SecurityGroupRule(`main-db-node-db-rule`, {
+      type: "ingress",
+      fromPort: DB_PORT,
+      toPort: DB_PORT,
+      protocol: "tcp",
+      securityGroupId: this.dbCluster.sg.id,
+      sourceSecurityGroupId: cluster.nodeSecurityGroup.id,
+    });
     new k8s.apiextensions.CustomResource(
       "db-external-secret",
       {
@@ -158,7 +172,7 @@ export class CoreStack {
           },
           externalSecretName: "db-secret",
           externalSecretSpec: {
-            refreshInterval: "1m",
+            refreshInterval: "1h",
             secretStoreRef: {
               name: "secretstore-aws",
               kind: "ClusterSecretStore",
@@ -287,10 +301,11 @@ export class CoreStack {
       });
     }
 
-    const { domains, certificates } = new DnsConfiguration(stack, {
-      subdomain: props.subdomain,
-      namespace: automationNamespace,
-    });
+    const { domains, certificates, cloudfrontCertificate } =
+      new DnsConfiguration(stack, {
+        subdomain: props.subdomain,
+        namespace: automationNamespace,
+      });
 
     // Ingress & Load balancer
     new AwsNginxIngress(stack, {
@@ -421,7 +436,8 @@ export class CoreStack {
           namespace: websitesNamespace,
         },
         data: {
-          REDIS_HOST: "redis-live-do-user-7412958-0.b.db.ondigitalocean.com",
+          REDIS_HOST:
+            "private-redis-live-do-user-7412958-0.b.db.ondigitalocean.com",
           REDIS_PORT: "25061",
           REDIS_PASSWORD: config.requireSecret("redis_password"),
           REDIS_USERNAME: "default",
@@ -430,11 +446,14 @@ export class CoreStack {
     new k8s.yaml.ConfigFile(`${stack}-cloudwatch-config`, {
       file: "config/cloudwatch-config.yaml",
     });
-
-    // configClusterExternalSecret("aws-user-credentials", {
-    //   namespace: websitesNamespace,
-    //   keys: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
-    // });
+    const cdnOriginAccessControl = new aws.cloudfront.OriginAccessControl(
+      `${stack}-s3-cdn-access-control`,
+      {
+        originAccessControlOriginType: "s3",
+        signingBehavior: "always",
+        signingProtocol: "sigv4",
+      }
+    );
 
     this.bucket = new aws.s3.Bucket(
       `${stack}-websites-bucket`,
@@ -452,70 +471,100 @@ export class CoreStack {
       }
     );
 
-    const cdn = new aws.cloudfront.Distribution(`${stack}-s3-cdn`, {
-      enabled: true,
-      retainOnDelete: false,
-      priceClass: "PriceClass_100",
-      defaultCacheBehavior: {
-        defaultTtl: 0, // by default, don't cache anything without a Cache-Control header.
-        minTtl: 0,
-        maxTtl: 365 * 24 * 60 * 60, // allow cache ttls up to 1 year
-        allowedMethods: ["GET", "HEAD", "OPTIONS"],
-        cachedMethods: ["GET", "HEAD", "OPTIONS"],
-        compress: true,
-        forwardedValues: {
-          cookies: { forward: "all" },
-          queryString: true,
-        },
-        targetOriginId: this.bucket.arn,
-        viewerProtocolPolicy: "redirect-to-https",
-      },
-      orderedCacheBehaviors: [
-        // This defines the cache rules *specifically* for assets in /static/, with
-        // a few key differences:
-        //  - cookies are not forwarded, and hence not used as part of the cache key
-        //  - query strings are not forwarded
-        //  - a default ttl is set, in case the origin forgets to configure caching
-        //  - mutative methods (POST, PUT, etc) are not allowed
-        {
-          pathPattern: "/*",
-          defaultTtl: 60,
-          minTtl: 60,
-          maxTtl: 120,
-          compress: true,
-          allowedMethods: ["HEAD", "GET", "OPTIONS"],
+    const cdnDomains = domains.map((domain) => `cdn-${domain}`);
+
+    const cloudfront = new aws.cloudfront.Distribution(
+      `${stack}-s3-cdn`,
+      {
+        enabled: true,
+        retainOnDelete: false,
+        priceClass: "PriceClass_100",
+
+        defaultCacheBehavior: {
+          cachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+          allowedMethods: ["GET", "HEAD", "OPTIONS"],
           cachedMethods: ["GET", "HEAD", "OPTIONS"],
+          compress: true,
           targetOriginId: this.bucket.arn,
-          forwardedValues: {
-            cookies: { forward: "none" },
-            queryString: true,
-            headers: [],
-          },
           viewerProtocolPolicy: "redirect-to-https",
         },
-      ],
-      origins: [
+        orderedCacheBehaviors: [
+          {
+            pathPattern: "/*",
+            cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            compress: true,
+            allowedMethods: ["HEAD", "GET", "OPTIONS"],
+            cachedMethods: ["GET", "HEAD", "OPTIONS"],
+            targetOriginId: this.bucket.arn,
+            viewerProtocolPolicy: "allow-all",
+          },
+        ],
+        origins: [
+          {
+            domainName: this.bucket.bucketRegionalDomainName,
+            originId: this.bucket.arn,
+            originAccessControlId: cdnOriginAccessControl.id,
+          },
+        ],
+        restrictions: {
+          geoRestriction: {
+            restrictionType: "none",
+          },
+        },
+        viewerCertificate: {
+          acmCertificateArn: cloudfrontCertificate.arn,
+          cloudfrontDefaultCertificate: false,
+          minimumProtocolVersion: "TLSv1.2_2021",
+          sslSupportMethod: "sni-only",
+        },
+        aliases: [...cdnDomains],
+        tags,
+      },
+      { ignoreChanges: ["defaultCacheBehavior.cachePolicyId"] }
+    );
+    new aws.s3.BucketPolicy(`${stack}-websites-bucket-cdn-policy`, {
+      bucket: this.bucket.bucket,
+      policy: pulumi
+        .all([cloudfront.arn, this.bucket.arn])
+        .apply(([cdnIdentityArn, bucketArn]) =>
+          JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Action: ["s3:GetObject", "s3:GetObjectVersion"],
+                Resource: `${bucketArn}/*`,
+                Principal: { Service: "cloudfront.amazonaws.com" },
+                Effect: "Allow",
+                Condition: {
+                  StringEquals: {
+                    "AWS:SourceArn": cdnIdentityArn,
+                  },
+                },
+              },
+              {
+                Action: ["s3:GetObject", "s3:GetObjectVersion"],
+                Resource: `${bucketArn}/*`,
+                Principal: "*",
+                Effect: "Allow",
+              },
+            ],
+          })
+        ),
+    });
+    const cdnPrefix = props.subdomain ? `cdn-${props.subdomain}.` : "cdn-";
+
+    cdnDomains.forEach((domain) => {
+      new cloudflare.Record(
+        domain,
         {
-          domainName: this.bucket.bucketRegionalDomainName,
-          originId: this.bucket.arn,
-          // s3OriginConfig: {
-          //   originAccessIdentity: originAccessIdentity.cloudfrontAccessIdentityPath,
-          // },
+          name: domain,
+          zoneId: domainZoneMap[domain.replace(cdnPrefix, "")],
+          type: "CNAME",
+          value: cloudfront.domainName,
+          proxied: true,
         },
-      ],
-      restrictions: {
-        geoRestriction: {
-          restrictionType: "none",
-        },
-      },
-      viewerCertificate: {
-        // ...certs,
-        cloudfrontDefaultCertificate: true,
-        // minimumProtocolVersion: "TLSv1.2_2021",
-        // sslSupportMethod: "sni-only",
-      },
-      // aliases: landingDomains,
-      tags,
+        { deleteBeforeReplace: true }
+      );
     });
 
     new k8s.core.v1.ConfigMap(`${stack}-shared-env`, {
@@ -524,328 +573,12 @@ export class CoreStack {
         namespace: websitesNamespace,
       },
       data: {
-        CDN_URL: pulumi.interpolate`https://${cdn.domainName}/`,
         AWS_BUCKET: this.bucket.bucket,
       },
     });
 
     if (stack == "dev") {
-      new GithubRunner(clusterOidcProvider);
+      new GithubRunner();
     }
-  }
-}
-
-export class BaseStack {
-  constructor(stack: string) {
-    const tags = { stack: stack };
-    const accountId = "707053725174";
-    const phpFmpRepository = new aws.ecr.Repository("php-fpm-repository", {
-      name: "php-fpm",
-    });
-    const phpCliRepository = new aws.ecr.Repository("php-cli-repository", {
-      name: "php-cli",
-    });
-
-    // Security
-
-    const accessLoggingBucket = new aws.s3.BucketV2(`AccessLoggingBucket`);
-    new aws.s3.BucketVersioningV2("AccessLoggingBucketVersioning", {
-      bucket: accessLoggingBucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
-      },
-    });
-    new aws.s3.BucketAclV2("accessLoggingBucketAcl", {
-      bucket: accessLoggingBucket.id,
-      acl: "log-delivery-write",
-    });
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      "accessLoggingBucketEncryption",
-      {
-        bucket: accessLoggingBucket.bucket,
-        rules: [
-          {
-            bucketKeyEnabled: true,
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "aws:kms",
-            },
-          },
-        ],
-      }
-    );
-    new aws.s3.BucketPublicAccessBlock("AccessLoggingBucketPublicAccessBlock", {
-      bucket: accessLoggingBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    const flowLogBucket = new aws.s3.BucketV2(`${stack}-vpc-flow-log-bucket`, {
-      loggings: [
-        { targetBucket: accessLoggingBucket.bucket, targetPrefix: "flow-logs" },
-      ],
-    });
-    // new aws.ec2.FlowLog(`${stack}-vpc-flow-log`, {
-    //   logDestination: flowLogBucket.arn,
-    //   logDestinationType: "s3",
-    //   trafficType: "ALL",
-    //   vpcId: this.vpc.id,
-    // });
-
-    new AwsConfig(stack);
-
-    // IAM
-    new aws.accessanalyzer.Analyzer("IamAccessAnalyzer", {
-      analyzerName: "BaseAnalyzer",
-    });
-    new aws.iam.AccountPasswordPolicy("AccountPasswordPolicy", {
-      allowUsersToChangePassword: true,
-      minimumPasswordLength: 14,
-      requireLowercaseCharacters: true,
-      requireNumbers: true,
-      requireSymbols: true,
-      requireUppercaseCharacters: true,
-    });
-
-    new aws.guardduty.Detector("GuardDutyDetector", {
-      datasources: {
-        s3Logs: {
-          enable: true,
-        },
-      },
-      enable: true,
-    });
-
-    // Cloud Trail
-    const cloudTrailKey = new aws.kms.Key(`cloudtrail-kms`, {
-      customerMasterKeySpec: "SYMMETRIC_DEFAULT",
-      keyUsage: "ENCRYPT_DECRYPT",
-      description: "encrypts cloudtrail events",
-      tags,
-      // policy: pulumi.all([accountId]).apply((accountId) =>
-      //
-      // ),
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Id: "Key policy created by CloudTrail",
-        Statement: [
-          {
-            Sid: "Enable IAM User Permissions",
-            Effect: "Allow",
-            Principal: {
-              AWS: ["arn:aws:iam::707053725174:root"],
-            },
-            Action: "kms:*",
-            Resource: "*",
-          },
-          {
-            Sid: "Allow CloudTrail to encrypt logs",
-            Effect: "Allow",
-            Principal: {
-              Service: "cloudtrail.amazonaws.com",
-            },
-            Action: "kms:GenerateDataKey*",
-            Resource: "*",
-            Condition: {
-              StringEquals: {
-                "AWS:SourceArn":
-                  "arn:aws:cloudtrail:eu-west-2:707053725174:trail/base-trail",
-              },
-              StringLike: {
-                "kms:EncryptionContext:aws:cloudtrail:arn":
-                  "arn:aws:cloudtrail:*:707053725174:trail/*",
-              },
-            },
-          },
-          {
-            Sid: "Allow CloudTrail to describe key",
-            Effect: "Allow",
-            Principal: {
-              Service: "cloudtrail.amazonaws.com",
-            },
-            Action: "kms:DescribeKey",
-            Resource: "*",
-          },
-          {
-            Sid: "Allow principals in the account to decrypt log files",
-            Effect: "Allow",
-            Principal: {
-              AWS: "*",
-            },
-            Action: ["kms:Decrypt", "kms:ReEncryptFrom"],
-            Resource: "*",
-            Condition: {
-              StringEquals: {
-                "kms:CallerAccount": "707053725174",
-              },
-              StringLike: {
-                "kms:EncryptionContext:aws:cloudtrail:arn":
-                  "arn:aws:cloudtrail:*:707053725174:trail/*",
-              },
-            },
-          },
-          {
-            Sid: "Allow alias creation during setup",
-            Effect: "Allow",
-            Principal: {
-              AWS: "*",
-            },
-            Action: "kms:CreateAlias",
-            Resource: "*",
-            Condition: {
-              StringEquals: {
-                "kms:CallerAccount": "707053725174",
-                "kms:ViaService": "ec2.eu-west-2.amazonaws.com",
-              },
-            },
-          },
-          {
-            Sid: "Enable cross account log decryption",
-            Effect: "Allow",
-            Principal: {
-              AWS: "*",
-            },
-            Action: ["kms:Decrypt", "kms:ReEncryptFrom"],
-            Resource: "*",
-            Condition: {
-              StringEquals: {
-                "kms:CallerAccount": "707053725174",
-              },
-              StringLike: {
-                "kms:EncryptionContext:aws:cloudtrail:arn":
-                  "arn:aws:cloudtrail:*:707053725174:trail/*",
-              },
-            },
-          },
-        ],
-      }),
-    });
-    const cloudtrailLogsGroup = new aws.cloudwatch.LogGroup("cloudtrail-logs", {
-      name: "cloudtrail-logs",
-      tags: { stack },
-    });
-    const cloudtrailCloudwatchRole = new aws.iam.Role(
-      "base-trail-cloudwatch-role",
-      {
-        assumeRolePolicy: {
-          Version: "2012-10-17",
-          Statement: [
-            {
-              Action: "sts:AssumeRole",
-              Principal: {
-                Service: "cloudtrail.amazonaws.com",
-              },
-              Effect: "Allow",
-            },
-          ],
-        },
-        inlinePolicies: [
-          {
-            name: "cloudwatch",
-            policy: cloudtrailLogsGroup.arn.apply((arn) =>
-              JSON.stringify({
-                Version: "2012-10-17",
-                Statement: [
-                  {
-                    Sid: "AWSCloudTrailCreateLogStream2014110",
-                    Effect: "Allow",
-                    Action: ["logs:CreateLogStream"],
-                    Resource: [`${arn}:log-stream:*`],
-                  },
-                  {
-                    Sid: "AWSCloudTrailPutLogEvents20141101",
-                    Effect: "Allow",
-                    Action: ["logs:PutLogEvents"],
-                    Resource: [`${arn}:log-stream:*`],
-                  },
-                ],
-              })
-            ),
-          },
-        ],
-      }
-    );
-    const baseTrailBucket = new aws.s3.BucketV2("base-trail-bucket", {
-      bucket: "skyloop-trails",
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Sid: "AWSCloudTrailAclCheck20150319",
-            Effect: "Allow",
-            Principal: { Service: "cloudtrail.amazonaws.com" },
-            Action: "s3:GetBucketAcl",
-            Resource: "arn:aws:s3:::skyloop-trails",
-            Condition: {
-              StringEquals: {
-                "aws:SourceArn": `arn:aws:cloudtrail:${region}:${accountId}:trail/base-trail`,
-              },
-            },
-          },
-          {
-            Sid: "AWSCloudTrailWrite20150319",
-            Effect: "Allow",
-            Principal: { Service: "cloudtrail.amazonaws.com" },
-            Action: "s3:PutObject",
-            Resource: `arn:aws:s3:::skyloop-trails/AWSLogs/${accountId}/*`,
-            Condition: {
-              StringEquals: {
-                "s3:x-amz-acl": "bucket-owner-full-control",
-                "aws:SourceArn": `arn:aws:cloudtrail:${region}:${accountId}:trail/base-trail`,
-              },
-            },
-          },
-        ],
-      }),
-    });
-    new aws.s3.BucketVersioningV2("baseTrailBucketVersioning", {
-      bucket: accessLoggingBucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
-      },
-    });
-    new aws.s3.BucketAclV2("baseTrailBucketAcl", {
-      bucket: accessLoggingBucket.id,
-      acl: "log-delivery-write",
-    });
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      "baseTrailBucketEncryption",
-      {
-        bucket: accessLoggingBucket.bucket,
-        rules: [
-          {
-            bucketKeyEnabled: true,
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "aws:kms",
-            },
-          },
-        ],
-      }
-    );
-    new aws.s3.BucketPublicAccessBlock("baseTrailBucketPublicAccessBlock", {
-      bucket: accessLoggingBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    new aws.cloudtrail.Trail("base-trail", {
-      name: "base-trail",
-      isMultiRegionTrail: true,
-      enableLogFileValidation: true,
-      s3BucketName: baseTrailBucket.bucket,
-      cloudWatchLogsGroupArn: pulumi.interpolate`${cloudtrailLogsGroup.arn}:*`,
-      cloudWatchLogsRoleArn: cloudtrailCloudwatchRole.arn,
-
-      kmsKeyId: cloudTrailKey.arn,
-      insightSelectors: [
-        { insightType: "ApiCallRateInsight" },
-        { insightType: "ApiErrorRateInsight" },
-      ],
-    });
-
-    new SecurityHub(stack);
   }
 }

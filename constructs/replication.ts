@@ -275,6 +275,7 @@ export class DmsReplication {
           "meltingme",
           "rabbitsmeet",
           "spicywives",
+          "myjuicycrush",
         ],
       },
     };

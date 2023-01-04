@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { CoreStack, BaseStack } from "./stack";
+import { EnvironmentStack } from "./environmentStack";
+import { AccountStack } from "./accountStack";
 
 const stack = pulumi.getStack();
 export const region = aws.config.requireRegion();
@@ -13,7 +14,7 @@ export const accountId = currentAccount.then((account) => account.accountId);
 let stackResources: CoreStack = {};
 
 if (stack == "dev") {
-  stackResources = new CoreStack(stack, {
+  stackResources = new EnvironmentStack(stack, {
     cidrBlock: "10.0.0.0/18",
     subdomain: "beta",
     sshKeyName: stack,
@@ -24,7 +25,7 @@ if (stack == "dev") {
     websitesDbMinCapacity: 0.5,
   });
 } else if (stack == "prod") {
-  stackResources = new CoreStack(stack, {
+  stackResources = new EnvironmentStack(stack, {
     cidrBlock: "10.0.0.0/16",
     sshKeyName: stack,
     subdomain: "v2",
@@ -37,7 +38,7 @@ if (stack == "dev") {
   });
 } else if (stack == "base") {
   // @ts-ignore
-  stackResources = new BaseStack(stack);
+  stackResources = new AccountStack(stack);
 }
 export const vpc = {
   id: stackResources.vpc.vpcId,

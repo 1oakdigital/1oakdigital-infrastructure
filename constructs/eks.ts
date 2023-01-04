@@ -137,6 +137,7 @@ export class EksCluster {
       },
       this.cluster
     );
+
     const karpenterSa = new ServiceAccount({
       name: `karpenter-${stack}-sa`,
       namespace: "default",

@@ -47,6 +47,7 @@ export class RedisCluster {
         securityGroupIds: [this.sg.id],
         subnetGroupName: subnetGroup.name,
         parameterGroupName: "default.redis6.x",
+        snapshotRetentionLimit: 7,
         port: REDIS_PORT,
       },
       tags

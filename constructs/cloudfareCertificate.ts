@@ -4,6 +4,7 @@ import { Output } from "@pulumi/pulumi/output";
 import { CertificateArgs } from "./types";
 import * as cloudflare from "@pulumi/cloudflare";
 import { CloudflareDomain, domainZoneMap } from "../configs/domains";
+import { Provider } from "@pulumi/aws";
 
 export class CloudflareAcmCertificate {
   readonly certificate: aws.acm.Certificate;
@@ -61,17 +62,14 @@ export interface CloudflareAcmCertificateV2Props {
   subdomain?: string;
   domainName: string;
   subjectAlternativeNames: string[];
+  provider?: Provider;
 }
 
 export class CloudflareAcmCertificateV2 {
   readonly certificate: aws.acm.Certificate;
   readonly arn: Output<string>;
 
-  constructor(
-    baseName: string,
-    props: CloudflareAcmCertificateV2Props,
-  ) {
-
+  constructor(baseName: string, props: CloudflareAcmCertificateV2Props) {
     this.certificate = new aws.acm.Certificate(
       baseName,
       {
@@ -81,6 +79,7 @@ export class CloudflareAcmCertificateV2 {
       },
       {
         retainOnDelete: true,
+        provider: props.provider,
       }
     );
 
@@ -89,31 +88,26 @@ export class CloudflareAcmCertificateV2 {
         Object.entries(
           opts.reduce((acc, record) => {
             // dedup by the record's name
-              if (record.domainName.indexOf("*") != 0)
-             acc[record.resourceRecordName] = record;
+            if (record.domainName.indexOf("*") != 0)
+              acc[record.resourceRecordName] = record;
 
             return acc;
           }, {} as { [key: string]: aws.types.output.acm.CertificateDomainValidationOption })
-        ).map(
-          ([name, record], i) => {
-              const zoneId= domainZoneMap[
-                              record.domainName.split(".").slice(-2).join(".")
-                              ]
-              return new cloudflare.Record(
-                  `${name}-${zoneId}.${i}`,
-                  {
-                      name,
-                      zoneId,
-                      // ttl: 3600,
-                      type: "CNAME",
-                      value: record.resourceRecordValue,
-                  },
-                  {deleteBeforeReplace: true}
-              )
-          }
-        )
+        ).map(([name, record], i) => {
+          const zoneId =
+            domainZoneMap[record.domainName.split(".").slice(-2).join(".")];
+          return new cloudflare.Record(
+            `${name}-${zoneId}.${i}`,
+            {
+              name,
+              zoneId,
+              type: "CNAME",
+              value: record.resourceRecordValue,
+            },
+            { deleteBeforeReplace: true }
+          );
+        })
       );
-
 
     new aws.acm.CertificateValidation(
       `${baseName}-validation`,
@@ -123,7 +117,7 @@ export class CloudflareAcmCertificateV2 {
           rs.map((r) => r.hostname)
         ),
       },
-      { retainOnDelete: true }
+      { retainOnDelete: true, provider: props.provider }
     );
 
     this.arn = this.certificate.arn;

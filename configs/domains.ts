@@ -99,6 +99,7 @@ export const websiteDomains: CloudflareDomain[] = [
   { domain: "shag2night.com", zoneId: "fe7d776e2617c4858abc248460cb27f3" },
   { domain: "spicywives.com", zoneId: "5ddfb3aa6dc00a70ba9e401391b9e494" },
   { domain: "yummyaffair.com", zoneId: "20d81dd86be6cacbc86c59d7d132c363" },
+  { domain: "myjuicycrush.com", zoneId: "746c1a4e532df78ae3eb15a975ec9ce2" },
 ];
 
 export const allDomains: CloudflareDomain[] = [
@@ -152,4 +153,5 @@ export const domainZoneMap: { [key: string]: string } = {
   "spicywives.com": "5ddfb3aa6dc00a70ba9e401391b9e494",
   "yummyaffair.com": "20d81dd86be6cacbc86c59d7d132c363",
   "sloopadmin.com": "0aa7196612777c8cfc8228cac6901525",
+  "myjuicycrush.com": "746c1a4e532df78ae3eb15a975ec9ce2",
 };
